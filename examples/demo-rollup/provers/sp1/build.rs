@@ -33,6 +33,13 @@ fn main() {
         },
     );
     build_program_with_args(
+        "./guest-avail",
+        BuildArgs {
+            features: features.clone(),
+            ..Default::default()
+        },
+    );
+    build_program_with_args(
         "./guest-celestia",
         BuildArgs {
             features,

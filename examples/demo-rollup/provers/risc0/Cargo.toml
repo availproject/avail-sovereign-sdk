@@ -26,7 +26,7 @@ float_arithmetic = "deny"              # Can cause subtle bugs due to different 
 risc0-build = "1.2"
 
 [package.metadata.risc0]
-methods = ["guest-celestia", "guest-mock"]
+methods = ["guest-celestia", "guest-mock", "guest-avail"]
 
 [features]
 bench = []
