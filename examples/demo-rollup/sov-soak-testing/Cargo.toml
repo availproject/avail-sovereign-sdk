@@ -61,6 +61,7 @@ sov-paymaster = { path = "../../../crates/module-system/module-implementations/s
     "native",
 ] }
 sov-celestia-adapter = { workspace = true, features = ["native", "arbitrary"] }
+sov-avail-adapter = { workspace = true, features = ["native", "arbitrary"] }
 sov-address = { workspace = true }
 demo-stf = { path = "../stf", features = ["native"] }
 
