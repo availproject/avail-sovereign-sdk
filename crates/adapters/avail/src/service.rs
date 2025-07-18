@@ -9,7 +9,6 @@ use avail_rust_client::{
     AccountId, AccountIdExt, Client, HashNumber, Keypair, Options, TransactionDecodable, H256,
 };
 
-use futures::executor::block_on;
 use sov_rollup_interface::common::HexHash;
 use sov_rollup_interface::da::{DaProof, DaSpec, RelevantBlobs, RelevantProofs, Time};
 use sov_rollup_interface::node::da::{
