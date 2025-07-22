@@ -193,10 +193,7 @@ impl From<ForkDescription> for ForkMap {
                     parent: Some(prev_hash),
                 };
                 if let Some(b) = chain_map.blocks.insert(current_hash, block_info) {
-                    panic!(
-                        "duplicate block on fork_id={} on {} from={:?}",
-                        fork_id, current_hash, b
-                    );
+                    panic!("duplicate block on fork_id={fork_id} on {current_hash} from={b:?}");
                 };
             }
             for child_fork in fork.child_forks {

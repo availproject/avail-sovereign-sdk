@@ -44,7 +44,7 @@ pub(crate) fn setup_with_custom_runtime(
 ) -> (TestRunner<RT, S>, TestProver<TestSpec>, TestUser<S>) {
     let minimal_genesis_config = HighLevelZkGenesisConfig::generate_with_additional_accounts(1);
     let unbonded_user = minimal_genesis_config
-        .additional_accounts
+        .additional_accounts()
         .first()
         .unwrap()
         .clone();

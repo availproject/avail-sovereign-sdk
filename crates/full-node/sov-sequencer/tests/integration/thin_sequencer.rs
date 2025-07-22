@@ -80,7 +80,7 @@ async fn test_thin_direct_same_transactions() {
         .height;
     let mut slots = test_rollup.api_client.subscribe_slots().await.unwrap();
 
-    let user = genesis_config.additional_accounts.first().unwrap();
+    let user = genesis_config.additional_accounts().first().unwrap();
     // TODO: https://github.com/Sovereign-Labs/sovereign-sdk-wip/issues/947
     //    Ideally we want to test multiple transactions, but this bug prevents it
     // let all_txs = generate_txs(user, 10);
@@ -118,7 +118,7 @@ async fn test_thin_direct_same_transactions() {
 fn generate_tx_with_nonce(user: &TestUser<TestSpec>, nonce: u64) -> RawTx {
     let msg = TestRuntimeCall::Bank(
         sov_test_utils::sov_bank::CallMessage::<TestSpec>::CreateToken {
-            token_name: format!("sequencers-check-{}", nonce).try_into().unwrap(),
+            token_name: format!("sequencers-check-{nonce}").try_into().unwrap(),
             token_decimals: None,
             initial_balance: Amount::new(1000),
             mint_to_address: user.address(),

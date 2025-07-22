@@ -24,14 +24,16 @@ use tokio::sync::{broadcast, watch, Mutex, RwLock};
 use tokio::time::timeout;
 use tracing::{info, trace};
 
-use crate::{SequencerEvent, SequencerNotReadyDetails, TxHash, TxStatus, TxStatusManager};
+use crate::{
+    SequencerEvent, SequencerNotReadyDetails, SlotNumber, TxHash, TxStatus, TxStatusManager,
+};
 
 /// The [`Sequencer`] trait is responsible for accepting transactions and
 /// assembling them into batches.
 #[async_trait]
 pub trait Sequencer: Send + Sync + 'static {
     /// What data is returned to clients when a transaction is accepted.
-    type Confirmation: serde::Serialize + Send + Sync + 'static;
+    type Confirmation: Clone + serde::Serialize + Send + Sync + 'static;
     /// The rollup spec.
     type Spec: Spec;
     /// The rollup's [`Runtime`].
@@ -41,6 +43,13 @@ pub trait Sequencer: Send + Sync + 'static {
 
     /// Only available if the [`Sequencer`] supports events streaming.
     async fn subscribe_events(&self) -> Option<broadcast::Receiver<SequencerEvent<Self::Rt>>> {
+        None
+    }
+
+    /// Only available if the [`Sequencer`] supports transactions streaming.
+    async fn subscribe_transactions(
+        &self,
+    ) -> Option<broadcast::Receiver<AcceptedTx<Self::Confirmation>>> {
         None
     }
 
@@ -86,6 +95,18 @@ pub trait Sequencer: Send + Sync + 'static {
 
     /// Can be used to query and update the status of transactions.
     fn tx_status_manager(&self) -> &TxStatusManager<<Self::Spec as Spec>::Da>;
+
+    /// Closes the current batch.
+    async fn force_close_current_batch(&self) -> anyhow::Result<()> {
+        anyhow::bail!("Not implemented")
+    }
+
+    /// Subscribe to state update completion notifications. Note that notifications may be delivered out of order.
+    async fn subscribe_state_updates_unstable(
+        &self,
+    ) -> Option<broadcast::Receiver<StateUpdateNotification>> {
+        None
+    }
 }
 
 /// A transaction that has been accepted by the batch builder.
@@ -99,6 +120,15 @@ pub struct AcceptedTx<C> {
     pub tx_hash: TxHash,
     /// Confirmation data. Could be empty, a receipt, or other data.
     pub confirmation: C,
+}
+
+/// A notification that the sequencer has processed a new state update.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StateUpdateNotification {
+    /// The slot number that was processed.
+    pub slot_number: SlotNumber,
+    /// The finalized slot number.
+    pub finalized_slot_number: SlotNumber,
 }
 
 impl<C> AcceptedTx<C> {
@@ -115,13 +145,13 @@ impl<C> AcceptedTx<C> {
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct WithCachedTxHashes<I> {
     pub inner: I,
-    pub tx_hashes: Arc<[TxHash]>,
+    pub tx_hashes: Arc<Vec<TxHash>>,
 }
 
 /// Sends [`TxStatusManager`] notifications upon blob status changes.
 pub struct TxStatusBlobSenderHooks<Da: DaSpec> {
     txsm: TxStatusManager<Da>,
-    tx_hashes_by_blob_id: RwLock<HashMap<BlobInternalId, Arc<[TxHash]>>>,
+    tx_hashes_by_blob_id: RwLock<HashMap<BlobInternalId, Arc<Vec<TxHash>>>>,
 }
 
 impl<Da: DaSpec> TxStatusBlobSenderHooks<Da> {
@@ -132,7 +162,7 @@ impl<Da: DaSpec> TxStatusBlobSenderHooks<Da> {
         }
     }
 
-    pub async fn add_txs(&self, blob_id: BlobInternalId, tx_hashes: Arc<[TxHash]>) {
+    pub async fn add_txs(&self, blob_id: BlobInternalId, tx_hashes: Arc<Vec<TxHash>>) {
         self.tx_hashes_by_blob_id
             .write()
             .await
@@ -421,6 +451,24 @@ pub fn error_not_fully_synced(details: SequencerNotReadyDetails) -> ErrorObject 
             return ErrorObject {
                 status: StatusCode::SERVICE_UNAVAILABLE,
                 title: "The sequencer is still initializing and is not yet ready to accept transactions.".to_string(),
+                details: Default::default(),
+            };
+        }
+        SequencerNotReadyDetails::PreferredSequencerAtStopHeight{
+            height_to_stop_at,
+            current_height,
+
+        } => {
+            return ErrorObject {
+                status: StatusCode::SERVICE_UNAVAILABLE,
+                title: format!("The preferred sequencer has reached the stop height {height_to_stop_at} and is no longer accepting transactions. Current height: {current_height}").to_string(),
+                details: Default::default(),
+            };
+        }
+        SequencerNotReadyDetails::ReplicaMode => {
+            return ErrorObject {
+                status: StatusCode::SERVICE_UNAVAILABLE,
+                title: "Sequencer is replica and cannot accept transactions".to_string(),
                 details: Default::default(),
             };
         }

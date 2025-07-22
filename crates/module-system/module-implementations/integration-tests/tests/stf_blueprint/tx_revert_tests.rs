@@ -7,7 +7,7 @@ use sov_modules_api::{Amount, BatchSequencerOutcome, PrivateKey, PublicKey, TxPr
 use sov_rollup_interface::da::RelevantBlobs;
 use sov_test_utils::generators::bank::get_default_token_id;
 use sov_test_utils::runtime::TestRunner;
-use sov_test_utils::{TestHasher, TestSpec};
+use sov_test_utils::TestSpec;
 
 use super::{reset_constants, setup};
 use crate::stf_blueprint::da_simulation::{
@@ -91,7 +91,7 @@ fn test_tx_revert() -> Result<(), Infallible> {
 
         let latest_generation = runtime
             .uniqueness
-            .next_generation(&admin_key.pub_key().credential_id::<TestHasher>(), state)
+            .next_generation(&admin_key.pub_key().credential_id(), state)
             .unwrap();
 
         // with 3 transactions, the latest generation should be 2, because generators send
@@ -138,7 +138,7 @@ fn test_tx_bad_signature() -> Result<(), Infallible> {
                 "Transaction should fail with an `AuthenticationFailed` error"
             );
         }
-        unexpected => panic!("Expected TxEffect::Skipped but got {:?}", unexpected),
+        unexpected => panic!("Expected TxEffect::Skipped but got {unexpected:?}"),
     }
 
     assert_outcome(&batch_receipt.inner.outcome);
@@ -151,7 +151,7 @@ fn test_tx_bad_signature() -> Result<(), Infallible> {
 
         let nonce = runtime
             .uniqueness
-            .nonce(&admin_key.pub_key().credential_id::<TestHasher>(), state)
+            .nonce(&admin_key.pub_key().credential_id(), state)
             .unwrap_infallible()
             .unwrap_or_default();
 
@@ -205,8 +205,7 @@ fn test_tx_bad_nonce() {
     match &tx_receipts[0].receipt {
         sov_modules_api::TxEffect::Successful(_) => (),
         receipt => panic!(
-            "Expected first transaction to be Successful error, but got a different TxEffect: {:?}",
-            receipt
+            "Expected first transaction to be Successful error, but got a different TxEffect: {receipt:?}"
         ),
     }
 
@@ -217,10 +216,7 @@ fn test_tx_bad_nonce() {
                 TxProcessingError::CheckUniquenessFailed(..)
             ));
         }
-        receipt => panic!(
-            "Expected Skipped error, but got a different TxEffect: {:?}",
-            receipt
-        ),
+        receipt => panic!("Expected Skipped error, but got a different TxEffect: {receipt:?}"),
     }
 
     // We don't slash the sequencer for a bad nonce, since the nonce change might have
@@ -237,8 +233,7 @@ fn test_tx_bad_nonce() {
 
     assert!(
             final_sequencer_stake < initial_sequencer_stake,
-            "The sequencer stake should have decreased, final_sequencer_stake = {:?}, initial_sequencer_stake = {:?}",
-            final_sequencer_stake, initial_sequencer_stake
+            "The sequencer stake should have decreased, final_sequencer_stake = {final_sequencer_stake:?}, initial_sequencer_stake = {initial_sequencer_stake:?}"
         );
 }
 
@@ -287,7 +282,7 @@ fn test_tx_bad_serialization() -> Result<(), Infallible> {
             skipped.error,
             TxProcessingError::AuthenticationFailed(..)
         )),
-        unexpected => panic!("Expected TxEffect::Skipped but got {:?}", unexpected),
+        unexpected => panic!("Expected TxEffect::Skipped but got {unexpected:?}"),
     }
 
     assert_outcome(&batch_receipt.inner.outcome);

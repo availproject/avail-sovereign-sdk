@@ -423,13 +423,12 @@ where
     storage_manager.commit_change_set(change_set_2, root_2);
 
     // Thread B
-    let (sequencer_root, _) = sequencer_storage
-        .compute_state_update(
-            sequencer_state_accesses,
-            &<S::Storage as Storage>::Witness::default(),
-            sequencer_root_hash,
-        )
-        .unwrap();
+    let result = sequencer_storage.compute_state_update(
+        sequencer_state_accesses,
+        &<S::Storage as Storage>::Witness::default(),
+        sequencer_root_hash,
+    );
+    let (sequencer_root, _) = result.unwrap();
 
     // In reality, this kind of equality is going to be enforced by the sequencer state root checks.
     assert_ne!(sequencer_root, root_2);
@@ -510,8 +509,7 @@ fn assert_values<S: NativeStorage>(
     assert_eq!(
         last_value,
         get_value(None),
-        "Not specifying version should be equal to last version for this storage in {:?}",
-        namespace,
+        "Not specifying version should be equal to last version for this storage in {namespace:?}",
     );
 
     let next_version = expected_values.len() as u64;
@@ -528,8 +526,7 @@ fn assert_values<S: NativeStorage>(
         assert_eq!(
             None,
             get_value(Some(version)),
-            "Future version({}) should not be available",
-            version
+            "Future version({version}) should not be available"
         );
     }
 
@@ -554,6 +551,6 @@ fn assert_root_hashes<S: NativeStorage>(storage: &S, expected_root_hashes: Vec<S
     let future_root = storage
         .get_root_hash(SlotNumber::new_dangerous(next_version))
         .unwrap_err();
-    let expected_error = format!("Root node not found for version {}.", next_version);
+    let expected_error = format!("Root node not found for version {next_version}.");
     assert_eq!(expected_error, future_root.to_string());
 }

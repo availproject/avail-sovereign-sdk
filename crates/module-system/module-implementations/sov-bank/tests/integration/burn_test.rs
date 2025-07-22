@@ -110,10 +110,7 @@ fn burn_deployed_tokens_no_balance_fails() {
                     assert!(chain.next().is_none());
                     assert_eq!(
                         message_1,
-                        format!(
-                            "Failed to burn token_id={} owner={}",
-                            token_id, user_address
-                        )
+                        format!("Failed to burn token_id={token_id} owner={user_address}")
                     );
 
                     assert_eq!(
@@ -256,8 +253,7 @@ fn burn_more_than_available_balance_fails() {
                 assert_eq!(
                     message_1,
                     format!(
-                        "Failed to burn token_id={} owner={}",
-                        token_id, user_address
+                        "Failed to burn token_id={token_id} owner={user_address}"
                     )
                 );
 

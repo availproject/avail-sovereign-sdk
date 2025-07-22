@@ -336,8 +336,7 @@ mod tests {
             let expected = HexString::from_str(ZERO_HASHES_AS_HEX[i]).unwrap();
             assert_eq!(
                 actual, &expected,
-                "Bad hash at index {}. Expected {} but got {}",
-                i, expected, actual
+                "Bad hash at index {i}. Expected {expected} but got {actual}"
             );
         }
     }

@@ -4,8 +4,10 @@ include:
 # Uncomment this if you want to test network delays/errors
 #services:
 #  toxiproxy:
-#    image: shopify/toxiproxy
+#    image: shopify/toxiproxy:2.1.4
 #    hostname: toxiproxy
+#    environment:
+#      LOG_LEVEL: "debug"
 #    depends_on:
 #      - sequencer-0
 #    ports:
@@ -15,8 +17,6 @@ include:
 #    image: curlimages/curl:8.9.1
 #    depends_on:
 #      - toxiproxy
-#    networks:
-#      - monitoring-network
 #    volumes:
 #      - ./toxiproxy:/opt/toxiproxy
-#    command: ["/opt/toxiproxy/configure.sh"]
+#    command: [ "/opt/toxiproxy/configure.sh" ]

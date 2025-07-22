@@ -15,10 +15,13 @@ pub mod test_stateless;
 use std::sync::Arc;
 
 use axum::async_trait;
-pub use common::Sequencer;
+#[cfg(feature = "test-utils")]
+pub use common::StateUpdateNotification;
+pub use common::{react_to_state_updates, Sequencer};
 pub use config::{SequencerConfig, SequencerKindConfig};
 pub use rest_api::SequencerApis;
 use serde::Serialize;
+use sov_modules_api::capabilities::RollupHeight;
 use sov_modules_api::{RuntimeEventProcessor, RuntimeEventResponse};
 use sov_rollup_interface::common::SlotNumber;
 use sov_rollup_interface::TxHash;
@@ -58,6 +61,13 @@ pub enum SequencerNotReadyDetails {
     /// The sequencer is a preferred sequencer and dropped too far out of sync, and is currently
     /// attempting to recover.
     PreferredSequencerRecovering,
+    /// The prefered sequencer has reached the stop height and is no longer accepting transactions.
+    PreferredSequencerAtStopHeight {
+        height_to_stop_at: RollupHeight,
+        current_height: RollupHeight,
+    },
+    /// The sequencer is running in replica mode and cannot accept transactions.
+    ReplicaMode,
 }
 
 /// See [`crate::common::Sequencer::subscribe_events`].

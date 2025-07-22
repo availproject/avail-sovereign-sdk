@@ -228,7 +228,7 @@ impl<S: Storage> UniversalStateAccessor for AccessoryDelta<S> {
 
     fn get_value(&mut self, _namespace: Namespace, key: &SlotKey) -> Option<SlotValue> {
         if let Some(value) = self.writes.get(key) {
-            return value.clone().map(Into::into);
+            return value.clone();
         }
 
         self.storage.get_accessory(key, self.version)
@@ -319,7 +319,7 @@ where
 
     fn get_value(&mut self, namespace: Namespace, key: &SlotKey) -> Option<SlotValue> {
         if let Some(value) = self.writes.get(&(key.clone(), namespace)) {
-            value.clone().map(Into::into)
+            value.clone()
         } else {
             <T as UniversalStateAccessor>::get_value(&mut self.inner, namespace, key)
         }

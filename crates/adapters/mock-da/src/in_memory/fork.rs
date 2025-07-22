@@ -15,7 +15,7 @@ impl PlannedFork {
     /// * `trigger_at_height` - Height at which fork is "noticed".
     /// * `fork_height` - Height at which the chain forked. The height of the first block in `blobs` will be `fork_height + 1`
     /// * `blobs` - Blobs that will be added after fork. Single blob per each block.
-    ///     Blobs length needs be larger than difference between trigger_at_height and fork_height, otherwise there would be on block available at `trigger_at_height`
+    ///   Blobs length needs be larger than difference between trigger_at_height and fork_height, otherwise there would be on block available at `trigger_at_height`
     ///
     /// ```text
     /// ----- visual example:

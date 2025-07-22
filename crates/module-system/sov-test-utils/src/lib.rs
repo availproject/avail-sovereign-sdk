@@ -35,7 +35,11 @@ use sov_state::{DefaultStorageSpec, StateAccesses, Storage};
 pub use {sov_bank, sov_paymaster, sov_rollup_apis, sov_universal_wallet};
 
 mod evm;
+
 mod rt_agnostic_blueprint;
+
+/// Utilities for recording logs.
+pub mod logging;
 
 /// End-to-end rollup node testing utilities.
 pub mod test_rollup;
@@ -104,7 +108,7 @@ pub type TestStorageManager =
 /// The maximum batch size that the preferred sequencer can create.
 pub const TEST_MAX_BATCH_SIZE: usize = 1024 * 1024;
 
-/// I a blob is not processed within this time, it will shut down the sequencer.
+/// If a blob is not processed within this time, it will shut down the sequencer.
 pub const TEST_BLOB_PROCESSING_TIMEOUT: u64 = 60;
 
 /// The maximum number of concurrent blobs.
@@ -115,6 +119,8 @@ pub const TEST_DEFAULT_MAX_FEE: Amount = Amount::new(100_000_000_000);
 /// The default gas limit to set for a transaction. This is an optional parameter.
 /// This value should be high enough to be able to execute most standard transactions for the test rollup.
 pub const TEST_DEFAULT_GAS_LIMIT: [u64; 2] = [1_000_000_000, 1_000_000_000];
+/// The number of blocks required to finalize a block.
+pub const TEST_FINALIZATION_BLOCKS: u32 = 3;
 /// The default amount of tokens that should be staked by a user (prover, sequencer, etc.). This value is roughly equal to the
 /// max fee for a transaction because sequencers need to pre-emptively pay for all transactions' pre-execution checks using their stake.
 pub const TEST_DEFAULT_USER_STAKE: [u64; 2] = [100_000_000_000, 100_000_000_000];
@@ -276,6 +282,7 @@ pub fn new_test_gas_meter_with_price<S: Spec>(
 
 /// Serializes a value to JSON and validates it based on its
 /// [`schemars::JsonSchema`] rules.
+#[allow(clippy::result_large_err)]
 pub fn validate_schema<T>(item: &T) -> Result<(), jsonschema::error::ValidationErrorKind>
 where
     T: schemars::JsonSchema + serde::Serialize,

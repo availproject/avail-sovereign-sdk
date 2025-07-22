@@ -153,8 +153,7 @@ impl<S: Spec> ProverIncentives<S> {
             self.slash_prover(prover_address, state)?;
             // The state won't be reverted.
             return Err(ProcessProofError::ProverSlashedNoRevert(format!(
-                "Invalid output {}",
-                slashing_reason
+                "Invalid output {slashing_reason}"
             )));
         }
 

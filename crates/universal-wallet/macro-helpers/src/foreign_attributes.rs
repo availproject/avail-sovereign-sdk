@@ -9,6 +9,7 @@ use syn::{Ident, Meta};
 const PARSED_FOREIGN_ATTRS: [&str; 2] = ["serde", "borsh"];
 /// For parsing: helper struct parsing a single attr
 #[derive(Debug, FromMeta)]
+#[allow(clippy::large_enum_variant)]
 pub enum SingleForeignAttr {
     Serde(Serde),
     Borsh(Borsh),

@@ -67,9 +67,7 @@ where
             assert_eq!(
                 value,
                 Some(another_past_height as u32),
-                "Failed to get past value from {} on height {}",
-                another_past_height,
-                current_height
+                "Failed to get past value from {another_past_height} on height {current_height}"
             );
         }
     }

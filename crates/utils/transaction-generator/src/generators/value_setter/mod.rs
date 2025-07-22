@@ -9,7 +9,7 @@ use sov_modules_api::prelude::arbitrary::Arbitrary;
 use sov_modules_api::prelude::axum::async_trait;
 use sov_modules_api::{CryptoSpec, PrivateKey, Spec};
 use sov_value_setter::{CallMessage, CallMessageDiscriminants};
-use strum::{EnumDiscriminants, VariantArray};
+use strum::EnumDiscriminants;
 
 use crate::interface::{
     CallMessageGenerator, Distribution, GeneratedMessage, MessageValidity, Percent, Taggable,
@@ -23,17 +23,13 @@ mod harness_interface;
 
 pub use harness_interface::*;
 
-/// The call message discriminants used by the `Bank` module
-pub const MESSAGES: &[sov_value_setter::CallMessageDiscriminants] =
-    sov_value_setter::CallMessageDiscriminants::VARIANTS;
-
 /// The state of a value setter account
 #[derive(Debug, Clone)]
 pub struct ValueSetterAccount<S: Spec> {
     pub(crate) private_key: <S::CryptoSpec as CryptoSpec>::PrivateKey,
 }
 
-impl<'a, S: Spec, Data> From<&'a AccountState<S, Data>> for ValueSetterAccount<S> {
+impl<S: Spec, Data> From<&AccountState<S, Data>> for ValueSetterAccount<S> {
     fn from(value: &AccountState<S, Data>) -> ValueSetterAccount<S> {
         ValueSetterAccount {
             private_key: value.private_key.clone(),
@@ -59,10 +55,25 @@ impl<S: Spec> Taggable for ValueSetterAccount<S> {
 
 /// A message generator for the `ValueSetter` module.
 #[derive(Debug, Clone)]
+pub struct ValueSetterGeneratorOptions {
+    /// The maximum length of a `SetManyValues` message
+    pub maximum_vec_length: usize,
+    /// The min and maximum number of operations for a `ReadAndSetManyIndividualValues` message
+    pub min_and_max_number_of_individual_state_operations: (u64, u64),
+    /// The min and maximum number of new values for a `ReadAndSetHeavyState` message
+    pub min_and_max_number_of_new_values_for_heavy_state: (u64, u64),
+    /// The min and maximum number of iterations for a `RunCPUHeavyOperation` message
+    pub min_and_max_number_of_iterations_for_cpu_heavy_operation: (u64, u64),
+    /// Max heavy state size
+    pub max_heavy_state_size: u64,
+}
+
+/// A message generator for the `ValueSetter` module.
+#[derive(Debug, Clone)]
 pub struct ValueSetterMessageGenerator<S: Spec> {
     message_distribution: Distribution<CallMessageDiscriminants>,
-    /// The maximum length of a `SetManyValues` message
-    maximum_vec_length: usize,
+    /// Configuration options controlling message generation parameters.
+    options: ValueSetterGeneratorOptions,
     /// The private key of the admin of the value setter module
     admin_key: <<S as Spec>::CryptoSpec as CryptoSpec>::PrivateKey,
 }
@@ -71,12 +82,12 @@ impl<S: Spec> ValueSetterMessageGenerator<S> {
     /// Creates a new [`ValueSetterMessageGenerator`]
     pub fn new(
         message_distribution: Distribution<CallMessageDiscriminants>,
-        maximum_vec_length: usize,
+        options: ValueSetterGeneratorOptions,
         admin_key: <<S as Spec>::CryptoSpec as CryptoSpec>::PrivateKey,
     ) -> Self {
         Self {
             message_distribution,
-            maximum_vec_length,
+            options,
             admin_key,
         }
     }
@@ -230,8 +241,20 @@ impl<S: Spec> ValueSetterMessageGenerator<S> {
                     },
                 ))
             }
+            CallMessageDiscriminants::SetValueAndSleep => {
+                // Don't generate a sleep time, just set the value. We'd rather use real load than sleeps for soak testing.
+                let value = u32::arbitrary(u)?;
+
+                Ok(GeneratedMessage::new(
+                    CallMessage::SetValue { value, gas: None },
+                    self.admin_key.clone(),
+                    MessageOutcome::Successful {
+                        changes: vec![ValueSetterChangeLogEntry::ValueUpdated { new_value: value }],
+                    },
+                ))
+            }
             CallMessageDiscriminants::SetManyValues => {
-                let length = u.int_in_range(0..=self.maximum_vec_length)?;
+                let length = u.int_in_range(0..=self.options.maximum_vec_length)?;
                 let mut values = Vec::with_capacity(length);
 
                 for _ in 0..length {
@@ -248,15 +271,12 @@ impl<S: Spec> ValueSetterMessageGenerator<S> {
                     },
                 ))
             }
-            // Since we can't sensibly generate a value for this, we just generate SetValue instead.
             CallMessageDiscriminants::AssertVisibleSlotNumber => {
                 let value = u32::arbitrary(u)?;
                 Ok(GeneratedMessage::new(
                     CallMessage::SetValue { value, gas: None },
                     self.admin_key.clone(),
-                    MessageOutcome::Successful {
-                        changes: vec![ValueSetterChangeLogEntry::ValueUpdated { new_value: value }],
-                    },
+                    MessageOutcome::Successful { changes: vec![] },
                 ))
             }
             CallMessageDiscriminants::Panic => {
@@ -288,30 +308,6 @@ impl<S: Spec> ValueSetterMessageGenerator<S> {
         );
 
         match message_type {
-            CallMessageDiscriminants::SetValue => {
-                let value = u32::arbitrary(u)?;
-                let message = CallMessage::SetValue { value, gas: None };
-                Ok(GeneratedMessage {
-                    message,
-                    sender: account.private_key,
-                    outcome: MessageOutcome::Reverted,
-                })
-            }
-            CallMessageDiscriminants::SetManyValues => {
-                let length = u.int_in_range(0..=self.maximum_vec_length)?;
-                let mut values = Vec::with_capacity(length);
-
-                for _ in 0..length {
-                    values.push(u8::arbitrary(u)?);
-                }
-
-                let message = CallMessage::SetManyValues(values);
-                Ok(GeneratedMessage {
-                    message,
-                    sender: account.private_key,
-                    outcome: MessageOutcome::Reverted,
-                })
-            }
             CallMessageDiscriminants::AssertVisibleSlotNumber => {
                 let message = CallMessage::AssertVisibleSlotNumber {
                     expected_visible_slot_number: u64::MAX,
@@ -324,6 +320,15 @@ impl<S: Spec> ValueSetterMessageGenerator<S> {
             }
             CallMessageDiscriminants::Panic => {
                 unimplemented!("Panic is not supported in the transaction generator");
+            }
+            _ => {
+                let value = u32::arbitrary(u)?;
+                let message = CallMessage::SetValue { value, gas: None };
+                Ok(GeneratedMessage {
+                    message,
+                    sender: account.private_key,
+                    outcome: MessageOutcome::Reverted,
+                })
             }
         }
     }

@@ -41,15 +41,11 @@ fn print_times(
 
     assert!(
         tps > MIN_TPS,
-        "TPS {} dropped below {}, investigation is needed",
-        tps,
-        MIN_TPS
+        "TPS {tps} dropped below {MIN_TPS}, investigation is needed"
     );
     assert!(
         tps < MAX_TPS,
-        "TPS {} reached unrealistic number {}, investigation is needed",
-        tps,
-        MAX_TPS
+        "TPS {tps} reached unrealistic number {MAX_TPS}, investigation is needed"
     );
 }
 
@@ -84,8 +80,7 @@ impl BenchParams {
                 "false" | "0" | "no" => (),
                 val => {
                     panic!(
-                        "Unknown value '{}' for SOV_BENCH_TIMER_OUTPUT. expected true/false/0/1/yes/no",
-                        val
+                        "Unknown value '{val}' for SOV_BENCH_TIMER_OUTPUT. expected true/false/0/1/yes/no"
                     );
                 }
             }

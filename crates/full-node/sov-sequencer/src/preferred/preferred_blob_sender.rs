@@ -13,6 +13,8 @@ use crate::common::TxStatusBlobSenderHooks;
 #[derive(derive_more::Deref, derive_more::From)]
 pub struct PreferredBlobSender<Da: DaService> {
     inner: BlobSender<Da, TxStatusBlobSenderHooks<Da::Spec>, LedgerDb>,
+    #[deref(ignore)]
+    is_replica: bool,
 }
 
 impl<Da: DaService> PreferredBlobSender<Da> {
@@ -60,6 +62,10 @@ impl<Da: DaService> PreferredBlobSender<Da> {
         &mut self,
         completed_blobs: Vec<PreferredSequencerReadBlob>,
     ) -> anyhow::Result<()> {
+        if self.is_replica {
+            return Ok(());
+        }
+
         for blob in completed_blobs {
             match blob {
                 PreferredSequencerReadBlob::Batch(batch) => {

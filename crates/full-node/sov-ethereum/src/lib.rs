@@ -4,10 +4,9 @@ mod signer;
 
 use std::sync::Arc;
 
-use jsonrpsee::types::ErrorObjectOwned;
+use jsonrpsee::types::{ErrorCode, ErrorObjectOwned};
 use jsonrpsee::RpcModule;
 use reth_primitives::{Bytes, B256, U256};
-use reth_rpc_eth_types::EthApiError;
 pub use reth_rpc_eth_types::GasPriceOracleConfig;
 use sov_address::{EthereumAddress, FromVmAddress};
 #[cfg(feature = "local")]
@@ -139,8 +138,9 @@ where
     }
 
     fn make_raw_tx(&self, raw_tx: RlpEvmTransaction) -> Result<(B256, Vec<u8>), ErrorObjectOwned> {
-        let signed_transaction =
-            convert_to_transaction_signed(raw_tx.clone()).map_err(EthApiError::from)?;
+        let signed_transaction = convert_to_transaction_signed(raw_tx.clone())
+            // TODO: Fix this later
+            .map_err(|_err| ErrorCode::ServerError(500))?;
 
         let tx_hash = signed_transaction.hash();
         let message = borsh::to_vec(&raw_tx).expect("Failed to serialize raw tx");

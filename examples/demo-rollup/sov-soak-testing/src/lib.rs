@@ -25,6 +25,10 @@ use sov_paymaster::{
 use sov_rollup_interface::execution_mode::Native;
 use sov_sequencer::preferred::PreferredSequencerConfig;
 use sov_sequencer::SequencerKindConfig;
+use sov_synthetic_load::CallMessageDiscriminants::{
+    ReadAndSetHeavyState, ReadAndSetManyIndividualValues, RunCPUHeavyOperation,
+};
+use sov_synthetic_load::SyntheticLoad;
 use sov_test_utils::runtime::genesis::zk::config::HighLevelZkGenesisConfig;
 use sov_test_utils::runtime::genesis::zk::MinimalZkGenesisConfig;
 use sov_test_utils::test_rollup::{GenesisSource, RollupBuilder, TestRollup};
@@ -37,6 +41,9 @@ use sov_transaction_generator::generators::bank::harness_interface::BankHarness;
 use sov_transaction_generator::generators::bank::BankMessageGenerator;
 use sov_transaction_generator::generators::basic::{
     BasicCallMessageFactory, BasicChangeLogEntry, BasicModuleRef, BasicTag,
+};
+use sov_transaction_generator::generators::synthetic_load::{
+    SyntheticLoadHarness, SyntheticLoadMessageGenerator,
 };
 use sov_transaction_generator::interface::rng_utils::{get_random_bytes, randomize_buffer};
 use sov_transaction_generator::interface::MessageValidity;
@@ -52,7 +59,7 @@ pub const DEFAULT_FINALIZATION_BLOCKS: u32 = 5;
 
 generate_runtime! {
     name: TestRuntime,
-    modules: [paymaster: Paymaster<S>],
+    modules: [paymaster: Paymaster<S>, synthetic_load: SyntheticLoad<S>],
     operating_mode: sov_modules_api::runtime::OperatingMode::Zk,
     minimal_genesis_config_type: MinimalZkGenesisConfig<S>,
     gas_enforcer: paymaster: Paymaster<S>,
@@ -100,6 +107,47 @@ pub fn plain_tx_with_default_details<R: Runtime<S>, S: Spec>(
     }
 }
 
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+pub enum TxType {
+    /// Only [`SyntheticLoad`] transactions - includes many heavy txs
+    SyntheticLoad,
+    /// Only [`Bank`] transactions
+    Bank,
+    /// Mixed [`SyntheticLoad`] and [`Bank`] transactions
+    Mixed,
+}
+
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+pub enum ValidityProfile {
+    /// Only valid transactions
+    Clean,
+    /// 5% of invalid transactions
+    Buzzy,
+    /// 50/50
+    Half,
+    /// 90% of invalid transactions
+    Spammy,
+}
+
+impl ValidityProfile {
+    pub fn get_validity(&self) -> Distribution<MessageValidity> {
+        match self {
+            ValidityProfile::Clean => Distribution::with_values(vec![(1, MessageValidity::Valid)]),
+            ValidityProfile::Buzzy => Distribution::with_values(vec![
+                (20, MessageValidity::Valid),
+                (1, MessageValidity::Invalid),
+            ]),
+            ValidityProfile::Half => Distribution::with_values(vec![
+                (50, MessageValidity::Valid),
+                (50, MessageValidity::Invalid),
+            ]),
+            ValidityProfile::Spammy => Distribution::with_values(vec![
+                (10, MessageValidity::Valid),
+                (90, MessageValidity::Invalid),
+            ]),
+        }
+    }
+}
 pub struct TestGenerator<R: Runtime<S>, S: Spec> {
     generator: BasicCallMessageFactory<S, R>,
     state: State<S, BasicTag>,
@@ -156,9 +204,7 @@ impl<R: Runtime<S>, S: Spec> TestGenerator<R, S> {
 }
 
 // Setup generation with the given params
-pub fn setup_harness<R: Runtime<S> + EncodeCall<Bank<S>> + Clone, S: Spec>(
-    rng_salt: u128,
-) -> TestGenerator<R, S> {
+pub fn setup_harness<R: Runtime<S> + Clone, S: Spec>(rng_salt: u128) -> TestGenerator<R, S> {
     let factory = BasicCallMessageFactory::<S, R>::new();
     let state: State<S, BasicTag> = State::new();
 
@@ -197,11 +243,13 @@ pub fn setup_roles_and_config() -> Setup {
             .checked_mul(Amount::new(10))
             .unwrap(),
     );
-    genesis_config.additional_accounts.push(paymaster.clone());
+    genesis_config
+        .additional_accounts_mut()
+        .push(paymaster.clone());
 
     let users: Vec<TestUser<TestSpec>> = vec![TestUser::generate_with_default_balance(); 20];
 
-    genesis_config.additional_accounts.extend(users);
+    genesis_config.additional_accounts_mut().extend(users);
     let genesis_config = GenesisConfig::from_minimal_config(
         genesis_config.into(),
         PaymasterConfig {
@@ -224,6 +272,7 @@ pub fn setup_roles_and_config() -> Setup {
             .try_into()
             .unwrap(),
         },
+        (),
     );
     Setup {
         paymaster,
@@ -267,30 +316,87 @@ pub async fn setup_rollup(
         .expect("Impossible to start rollup")
 }
 
-/// Runs the transaction generator - currently only using the Bank harness.
 /// The passed client is responsible for handling timeouts (otherwise calls can block).
-pub async fn run_generator_task<R: Runtime<S> + EncodeCall<Bank<S>> + Clone, S: Spec>(
+pub async fn run_generator_task_for_bank_and_synthetic_load<
+    R: Runtime<S> + EncodeCall<Bank<S>> + EncodeCall<SyntheticLoad<S>> + Clone,
+    S: Spec,
+>(
     client: sov_api_spec::Client,
     rx: Receiver<bool>,
     worker_id: u128,
     num_workers: u32,
+    validity: Distribution<MessageValidity>,
+    tx_type: TxType,
 ) -> anyhow::Result<()> {
-    let mut nonces: HashMap<<<S as Spec>::CryptoSpec as CryptoSpec>::PublicKey, u64> =
-        Default::default();
-
-    let random_bytes = get_random_bytes(100_000_000, worker_id);
-    let u = &mut Unstructured::new(&random_bytes[..]);
     let bank_harness = BankHarness::new(BankMessageGenerator::<S>::new(
         Distribution::with_equiprobable_values(vec![Transfer]),
         Percent::fifty(),
     ));
-    let modules: Vec<BasicModuleRef<S, R>> = vec![Arc::new(bank_harness.clone())];
-    let modules = Distribution::with_equiprobable_values(modules);
-    let mut generator: TestGenerator<R, S> = setup_harness(worker_id);
+    let synthetic_load_admin = <<S as Spec>::CryptoSpec as CryptoSpec>::PrivateKey::generate();
+    let synthetic_load_harness = SyntheticLoadHarness::new(SyntheticLoadMessageGenerator::new(
+        Distribution::with_equiprobable_values(vec![
+            ReadAndSetManyIndividualValues,
+            ReadAndSetHeavyState,
+            RunCPUHeavyOperation,
+        ]),
+        sov_transaction_generator::generators::synthetic_load::SyntheticLoadGeneratorOptions {
+            maximum_vec_length: 10,
+            min_and_max_number_of_individual_state_operations: (1, 10000),
+            min_and_max_number_of_new_values_for_heavy_state: (100, 1000),
+            min_and_max_number_of_iterations_for_cpu_heavy_operation: (1000, 5000),
+            max_heavy_state_size: 1_000_000,
+        },
+        synthetic_load_admin,
+    ));
+    let modules: Vec<BasicModuleRef<S, R>> = match tx_type {
+        TxType::SyntheticLoad => vec![Arc::new(synthetic_load_harness.clone())],
+        TxType::Bank => vec![Arc::new(bank_harness.clone())],
+        TxType::Mixed => vec![
+            Arc::new(bank_harness.clone()),
+            Arc::new(synthetic_load_harness.clone()),
+        ],
+    };
 
+    prepare_and_send_txs(modules, client, rx, worker_id, num_workers, validity).await
+}
+
+/// The passed client is responsible for handling timeouts (otherwise calls can block).
+pub async fn run_generator_task_for_bank<R: Runtime<S> + EncodeCall<Bank<S>> + Clone, S: Spec>(
+    client: sov_api_spec::Client,
+    rx: Receiver<bool>,
+    worker_id: u128,
+    num_workers: u32,
+    validity: Distribution<MessageValidity>,
+) -> anyhow::Result<()> {
+    let bank_harness = BankHarness::new(BankMessageGenerator::<S>::new(
+        Distribution::with_equiprobable_values(vec![Transfer]),
+        Percent::fifty(),
+    ));
+
+    let modules: Vec<BasicModuleRef<S, R>> = vec![Arc::new(bank_harness.clone())];
+    prepare_and_send_txs(modules, client, rx, worker_id, num_workers, validity).await
+}
+
+async fn prepare_and_send_txs<R: Runtime<S> + Clone, S: Spec>(
+    modules: Vec<BasicModuleRef<S, R>>,
+    client: sov_api_spec::Client,
+    rx: Receiver<bool>,
+    worker_id: u128,
+    num_workers: u32,
+    validity: Distribution<MessageValidity>,
+) -> anyhow::Result<()> {
+    let mut nonces: HashMap<<<S as Spec>::CryptoSpec as CryptoSpec>::PublicKey, u64> =
+        Default::default();
+
+    let modules = Distribution::with_equiprobable_values(modules);
+    let random_bytes = get_random_bytes(100_000_000, worker_id);
+    let u = &mut Unstructured::new(&random_bytes[..]);
+
+    let mut generator: TestGenerator<R, S> = setup_harness::<R, _>(worker_id);
     let past_transaction_generations = config_value!("PAST_TRANSACTION_GENERATIONS") + 1;
     let worker_start = std::time::Instant::now();
     let mut total_txns = 0;
+
     while !*rx.borrow() {
         let txn_count = {
             // rng must fall out of scope before awaiting anything so this fn is Send
@@ -305,10 +411,6 @@ pub async fn run_generator_task<R: Runtime<S> + EncodeCall<Bank<S>> + Clone, S: 
 
         let mut txns = vec![];
         for _ in 0..txn_count {
-            let validity = Distribution::with_equiprobable_values(vec![
-                MessageValidity::Valid,
-                MessageValidity::Invalid,
-            ]);
             let validity = validity.select_value(u)?;
             let msg = generator.generate(&modules, *validity);
             let tx = plain_tx_with_default_details::<R, S>(&msg);
@@ -374,5 +476,6 @@ pub async fn run_generator_task<R: Runtime<S> + EncodeCall<Bank<S>> + Clone, S: 
         let elapsed = start.elapsed();
         tracing::debug!(id = %worker_id, "Sent {} transactions in {}ms. Current throughput: {:.2} txs per second. Running throughput: {:.2} txs per second", txns.len(), elapsed.as_millis(), (txns.len() * num_workers as usize) as f64 / elapsed.as_secs_f64(), (total_txns * num_workers as usize) as f64 / worker_start.elapsed().as_secs_f64());
     }
+
     Ok(())
 }

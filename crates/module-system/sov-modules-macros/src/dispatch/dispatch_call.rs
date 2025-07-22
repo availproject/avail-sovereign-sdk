@@ -6,7 +6,7 @@ use crate::common::{
     StructFieldExtractor, CALL,
 };
 
-impl<'a> StructDef<'a> {
+impl StructDef<'_> {
     fn create_call_enum_legs(&self) -> Vec<proc_macro2::TokenStream> {
         self.fields
             .iter()

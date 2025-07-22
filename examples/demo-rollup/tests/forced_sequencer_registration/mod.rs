@@ -6,9 +6,10 @@ use sov_blob_storage::config_deferred_slots_count;
 use sov_cli::NodeClient;
 use sov_demo_rollup::{mock_da_risc0_host_args, MockDemoRollup};
 use sov_mock_da::{MockAddress, MockDaSpec};
+use sov_modules_api::capabilities::TransactionAuthenticator;
 use sov_modules_api::execution_mode::Native;
 use sov_modules_api::transaction::{PriorityFeeBips, Transaction, UnsignedTransaction};
-use sov_modules_api::{Amount, CryptoSpec, OperatingMode, RawTx, Spec};
+use sov_modules_api::{Amount, CryptoSpec, OperatingMode, RawTx, Runtime as RuntimeT, Spec};
 use sov_modules_macros::config_value;
 use sov_rollup_interface::node::da::DaService;
 use sov_rollup_interface::node::ledger_api::IncludeChildren;
@@ -139,7 +140,10 @@ fn build_register_sequencer_tx(
 }
 
 fn transaction_into_blob(transaction: Transaction<Runtime<TestSpec>, TestSpec>) -> Vec<u8> {
-    let tx_data = borsh::to_vec(&transaction).unwrap();
-    let blob_data = RawTx { data: tx_data };
-    borsh::to_vec(&blob_data).unwrap()
+    borsh::to_vec(
+        &<Runtime<TestSpec> as RuntimeT<TestSpec>>::Auth::encode_with_standard_auth(RawTx {
+            data: borsh::to_vec(&transaction).unwrap(),
+        }),
+    )
+    .unwrap()
 }

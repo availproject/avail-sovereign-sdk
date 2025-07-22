@@ -81,7 +81,7 @@ impl ZkVerifier for SP1Verifier {
     ) -> Result<T, Self::Error> {
         let proof: SP1ProofWithPublicValues = bincode::deserialize(serialized_proof)?;
 
-        let prover = ProverClient::new();
+        let prover = ProverClient::from_env();
         let verifying_key = bincode::deserialize(&code_commitment.0)?;
         prover.verify(&proof, &verifying_key)?;
 
@@ -137,7 +137,7 @@ mod tests {
 
         const ELF: &[u8] = include_bytes!("../test_data/riscv32im-succinct-zkvm-elf");
 
-        let prover = ProverClient::new();
+        let prover = ProverClient::from_env();
         let (_, vk) = prover.setup(ELF);
         let method_id = SP1MethodId(bincode::serialize(&vk).unwrap());
         let encoded = method_id.encode();

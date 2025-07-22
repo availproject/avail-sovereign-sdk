@@ -76,19 +76,18 @@ async fn setup() -> anyhow::Result<demo_stf_json_client::Client> {
     .start()
     .await?;
 
-    test_rollup
-        .da_service
-        .produce_n_blocks_now(5)
-        .await
-        .unwrap();
+    test_rollup.da_service.produce_n_blocks_now(5).await?;
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Based on an assumption that this key is admin in sov-value-setter
     let key_and_address = read_private_key::<TestSpec>("tx_signer_private_key.json");
-    let msg =
-        RuntimeCall::<TestSpec>::ValueSetter(sov_value_setter::CallMessage::SetManyValues(vec![
-            1, 2, 3, 4, 5, 6, 7, 8,
-        ]));
+    let msg = RuntimeCall::<TestSpec>::SyntheticLoad(
+        sov_synthetic_load::CallMessage::ReadAndSetHeavyState {
+            number_of_new_values: 10,
+            max_heavy_state_size: 30,
+            salt: 10_000,
+        },
+    );
 
     let tx = default_test_signed_transaction::<Runtime<TestSpec>, TestSpec>(
         &key_and_address.private_key,
@@ -104,11 +103,7 @@ async fn setup() -> anyhow::Result<demo_stf_json_client::Client> {
         .await?;
     slot_subscription.next().await;
 
-    test_rollup
-        .da_service
-        .produce_n_blocks_now(3)
-        .await
-        .unwrap();
+    test_rollup.da_service.produce_n_blocks_now(3).await?;
 
     Ok(demo_stf_json_client::Client::new(
         &test_rollup.client.base_url,
@@ -210,19 +205,6 @@ async fn check_state_value(client: &demo_stf_json_client::Client) -> anyhow::Res
         );
     };
     assert!(finality_period >= 1);
-
-    // Empty value
-    let empty_value = client
-        .value_setter_value_get_state_value(None, None)
-        .await?;
-    match &empty_value.data {
-        RuntimeAnyJsonValue::Object(inner) => {
-            let value = inner.get("value");
-            assert_eq!(Some(&serde_json::Value::Null), value);
-        }
-        _ => panic!("Unexpected type for non set StateValue"),
-    }
-
     Ok(())
 }
 
@@ -246,22 +228,22 @@ async fn check_state_map(client: &demo_stf_json_client::Client) -> anyhow::Resul
 
 async fn check_state_vec(client: &demo_stf_json_client::Client) -> anyhow::Result<()> {
     let state_vec_info = client
-        .value_setter_many_values_get_state_vec_info(None, None)
+        .synthetic_load_very_large_vec_get_state_vec_info(None, None)
         .await
         .context("vector info")?;
     let info = state_vec_info.data.clone().length.unwrap();
-    assert_eq!(8, info);
+    assert_eq!(1000, info);
 
     let state_vec_element_0 = client
-        .value_setter_many_values_get_state_vec_element(0, None, None)
+        .synthetic_load_very_large_vec_get_state_vec_element(0, None, None)
         .await
         .context("first element")?;
 
     let state_vec_element_1 = client
-        .value_setter_many_values_get_state_vec_element(1, None, None)
+        .synthetic_load_very_large_vec_get_state_vec_element(1, None, None)
         .await?;
     let state_vec_element_last = client
-        .value_setter_many_values_get_state_vec_element(7, None, None)
+        .synthetic_load_very_large_vec_get_state_vec_element(7, None, None)
         .await
         .context("last element")?;
 
@@ -275,15 +257,15 @@ async fn check_state_vec(client: &demo_stf_json_client::Client) -> anyhow::Resul
             RuntimeAnyJsonValue::Number(value_1),
             RuntimeAnyJsonValue::Number(value_last),
         ) => {
-            assert_eq!(1.0, value_0);
-            assert_eq!(2.0, value_1);
-            assert_eq!(8.0, value_last);
+            assert_eq!(0.0, value_0);
+            assert_eq!(1.0, value_1);
+            assert_eq!(7.0, value_last);
         }
         (_, _, _) => panic!("Incorrect type returned in vector"),
     }
 
     let state_vec_out_of_bounds = client
-        .value_setter_many_values_get_state_vec_element(u16::MAX as u64, None, None)
+        .synthetic_load_very_large_vec_get_state_vec_element(u32::MAX as u64, None, None)
         .await
         .unwrap_err();
 
@@ -293,10 +275,10 @@ async fn check_state_vec(client: &demo_stf_json_client::Client) -> anyhow::Resul
     );
     check_not_found_error(
         state_vec_out_of_bounds,
-        "many_values '65535' not found",
+        "very_large_vec '4294967295' not found",
         // TODO: Should it be index. Offloading it to item of better id handling.
         "id",
-        "65535",
+        "4294967295",
     );
     Ok(())
 }
@@ -308,7 +290,7 @@ async fn check_custom_endpoints(client: &demo_stf_json_client::Client) -> anyhow
         .bank_custom_token_get_total_supply(&gas_token_id)
         .await?;
     let coins = total_gas_supply.data.clone().unwrap();
-    let amount = coins.amount.unwrap().parse::<u128>().unwrap();
+    let amount = coins.amount.unwrap().parse::<u128>()?;
     assert!(amount > 100);
 
     assert_eq!(gas_token_id, coins.token_id.unwrap());
@@ -335,14 +317,14 @@ async fn check_custom_endpoints(client: &demo_stf_json_client::Client) -> anyhow
 
 async fn check_historical_data(client: &demo_stf_json_client::Client) -> anyhow::Result<()> {
     let state_vec_info = client
-        .value_setter_many_values_get_state_vec_info(Some(0), None)
+        .synthetic_load_very_large_vec_get_state_vec_info(Some(0), None)
         .await?;
     let info = state_vec_info.data.clone().length.unwrap();
-    assert_eq!(0, info);
+    assert_eq!(1000, info);
 
-    // StateVec info is zero in the future
+    // StateVec info non existing in the future.
     let state_vec_err = client
-        .value_setter_many_values_get_state_vec_info(Some(u32::MAX as u64), None)
+        .synthetic_load_very_large_vec_get_state_vec_info(Some(u32::MAX as u64), None)
         .await
         .unwrap_err();
 
@@ -354,14 +336,14 @@ async fn check_historical_data(client: &demo_stf_json_client::Client) -> anyhow:
     }
 
     let state_vec_element_response = client
-        .value_setter_many_values_get_state_vec_element(1, Some(u32::MAX as u64), None)
+        .synthetic_load_very_large_vec_get_state_vec_element(1, Some(u32::MAX as u64), None)
         .await
         .unwrap_err();
     check_not_found_error(
         state_vec_element_response,
         "invalid rollup height",
         "message",
-        "Impossible to get the rollup state at the specified height. Please ensure you have queried the correct height."
+        "Impossible to get the rollup state at the specified height. Please ensure you have queried the correct height.",
     );
     Ok(())
 }
@@ -392,7 +374,7 @@ fn check_not_found_error(
             }
         }
         _ => {
-            panic!("Unexpected error response: {:?}", credential_id_response)
+            panic!("Unexpected error response: {credential_id_response:?}")
         }
     };
 }

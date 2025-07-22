@@ -93,10 +93,10 @@ impl LedgerRpcReader {
                     self.db
                         .get_async::<SlotByNumber>(&slot_num)
                         .await
-                        .with_context(|| format!("Failed to query slot with number: {}", slot_num))
+                        .with_context(|| format!("Failed to query slot with number: {slot_num}"))
                         .and_then(|slot_opt| {
                             slot_opt.with_context(|| {
-                                format!("Slot with number: {} does not exist in storage", slot_num)
+                                format!("Slot with number: {slot_num} does not exist in storage")
                             })
                         })
                 };

@@ -14,8 +14,8 @@ type RT = TestRuntime<S>;
 fn setup() -> (TestRunner<TestRuntime<S>, S>, TestUser<S>, TestUser<S>) {
     let genesis_config = HighLevelZkGenesisConfig::generate_with_additional_accounts(2);
 
-    let admin_account = genesis_config.additional_accounts[0].clone();
-    let extra_account = genesis_config.additional_accounts[1].clone();
+    let admin_account = genesis_config.additional_accounts()[0].clone();
+    let extra_account = genesis_config.additional_accounts()[1].clone();
 
     let genesis = GenesisConfig::from_minimal_config(genesis_config.clone().into(), ());
 

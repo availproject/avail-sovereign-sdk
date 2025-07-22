@@ -16,19 +16,16 @@ pub(crate) type Timestamp = u128;
 
 /// Spawns task that published metrics in the background.
 pub fn init_metrics_tracker(config: &MonitoringConfig) {
-    match METRICS_TRACKER.get() {
-        None => {
-            let (sender, receiver) =
-                tokio::sync::mpsc::channel(config.get_max_pending_metrics() as usize);
-            let config = config.clone();
-            let _handle = tokio::spawn(async move {
-                publisher::metrics_publisher_task(receiver, &config).await;
-            });
-            tracing::trace!("Metrics tracker initialized");
-            OnceLock::set(&METRICS_TRACKER, MetricsTracker { sender })
-                .expect("Metrics tracker failed to set metrics");
-        }
-        Some(_) => {}
+    if METRICS_TRACKER.get().is_none() {
+        let (sender, receiver) =
+            tokio::sync::mpsc::channel(config.get_max_pending_metrics() as usize);
+        let config = config.clone();
+        let _handle = tokio::spawn(async move {
+            publisher::metrics_publisher_task(receiver, &config).await;
+        });
+        tracing::trace!("Metrics tracker initialized");
+        OnceLock::set(&METRICS_TRACKER, MetricsTracker { sender })
+            .expect("Metrics tracker failed to set metrics");
     }
 }
 
@@ -102,6 +99,7 @@ impl MetricsTracker {
             stf_transition_time,
             extract_blobs_time,
             extraction_proof_time,
+            processing_changes_time,
         } = point;
         self.submit_with_time(
             timestamp,
@@ -131,6 +129,7 @@ impl MetricsTracker {
                 stf_transition_time,
                 extract_blobs_time,
                 extraction_proof_time,
+                processing_changes_time,
             },
         );
     }
@@ -175,6 +174,8 @@ pub struct RunnerMetrics {
     pub extract_blobs_time: std::time::Duration,
     /// Time it took to build proof that the relevant blobs were extracted correctly.
     pub extraction_proof_time: std::time::Duration,
+    /// Time it took to process changes after slot has been applied proofs has been processed.
+    pub processing_changes_time: std::time::Duration,
 }
 
 #[derive(Debug)]
@@ -202,6 +203,32 @@ pub(crate) struct RunnerTimeMetrics {
     pub stf_transition_time: std::time::Duration,
     pub extract_blobs_time: std::time::Duration,
     pub extraction_proof_time: std::time::Duration,
+    pub processing_changes_time: std::time::Duration,
+}
+
+/// Detailed metrics on how much time it took to process changes after a slot has been applied.
+#[derive(Debug)]
+pub struct RunnerProcessStfChangesMetrics {
+    /// DA height at which changes were processed.
+    pub da_height: u64,
+    /// Number of aggregated proofs were to process.
+    pub aggregated_proofs_count: usize,
+    /// A number of transitions have to be finalized.
+    pub finalized_transitions_count: usize,
+    /// Time the whole operation took.
+    pub total_time: std::time::Duration,
+    /// Time it took to identify which of the seen transitions can be considered as finalized.
+    pub processing_finalized_transitions_time: std::time::Duration,
+    /// Time it took to materialize all ledger-related changes.
+    pub ledger_changes_materializing_time: std::time::Duration,
+    /// Time to save changes to the storage manager.
+    pub saving_to_storage_time: std::time::Duration,
+    /// Time to commit all finalized block headers in the storage manager.
+    pub committing_storage_time: std::time::Duration,
+    /// Time it took to send updated API and LedgerDB storage.
+    pub updating_api_storage_time: std::time::Duration,
+    /// Time it took to send STF info to the prover, if prover is enabled.
+    pub sending_stf_info_time_to_prover_time: std::time::Duration,
 }
 
 /// Simplified version of [`sov_rollup_interface::stf::TxEffect`]
@@ -337,7 +364,7 @@ impl Metric for RunnerTimeMetrics {
     fn serialize_for_telegraf(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
         write!(
             buffer,
-            "{} da_height={},process_slot={},apply_slot={},stf_transition={},extract_blobs={},blob_extraction_proof={}",
+            "{} da_height={},process_slot={},apply_slot={},stf_transition={},extract_blobs={},blob_extraction_proof={},processing_changes_time={}",
             self.measurement_name(),
             self.da_height,
             self.process_slot_time.as_micros(),
@@ -345,6 +372,33 @@ impl Metric for RunnerTimeMetrics {
             self.stf_transition_time.as_micros(),
             self.extract_blobs_time.as_micros(),
             self.extraction_proof_time.as_micros(),
+            self.processing_changes_time.as_micros(),
+        )
+    }
+}
+
+impl Metric for RunnerProcessStfChangesMetrics {
+    fn measurement_name(&self) -> &'static str {
+        "sov_runner_process_stf_changes"
+    }
+
+    fn serialize_for_telegraf(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+        write!(
+            buffer,
+            "{},da_height={} proofs_count={},finalized_transitions_count={},total_time_us={},processing_finalized_transitions_time_us={},ledger_materializing_time_us={},saving_to_storage_time={},committing_storage_time={},update_api_storage_time={},sending_stf_to_prover_time={}",
+            self.measurement_name(),
+            // Tags
+            self.da_height,
+            // Fields
+            self.aggregated_proofs_count,
+            self.finalized_transitions_count,
+            self.total_time.as_micros(),
+            self.processing_finalized_transitions_time.as_micros(),
+            self.ledger_changes_materializing_time.as_micros(),
+            self.saving_to_storage_time.as_micros(),
+            self.committing_storage_time.as_micros(),
+            self.updating_api_storage_time.as_micros(),
+            self.sending_stf_info_time_to_prover_time.as_micros(),
         )
     }
 }
@@ -563,7 +617,7 @@ impl Metric for ZkVmExecutionChunk {
                 // Uses special telegraf formatting
                 let telegraf_formatted_key = safe_telegraf_string(key);
 
-                format!("{}={}", telegraf_formatted_key, value)
+                format!("{telegraf_formatted_key}={value}")
             })
             .collect::<Vec<_>>()
             .join(",");

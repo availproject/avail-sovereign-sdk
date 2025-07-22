@@ -2039,8 +2039,6 @@ dependencies = [
 name = "demo-stf"
 version = "0.3.0"
 dependencies = [
- "alloy-chains",
- "alloy-primitives",
  "anyhow",
  "borsh",
  "schemars 0.8.22",
@@ -2062,9 +2060,9 @@ dependencies = [
  "sov-rollup-interface",
  "sov-sequencer-registry",
  "sov-state",
+ "sov-synthetic-load",
  "sov-test-modules",
  "sov-uniqueness",
- "sov-value-setter",
  "strum 0.26.3",
 ]
 
@@ -4056,7 +4054,7 @@ dependencies = [
 [[package]]
 name = "nomt-core"
 version = "1.0.0-preview"
-source = "git+https://github.com/thrumdev/nomt.git?rev=7f6db113d7bb081e27c4d5bf57df20943280b0f9#7f6db113d7bb081e27c4d5bf57df20943280b0f9"
+source = "git+https://github.com/thrumdev/nomt.git?rev=ff4491440d401f32e18fe91041c4344b2bacb068#ff4491440d401f32e18fe91041c4344b2bacb068"
 dependencies = [
  "arrayvec 0.7.6",
  "bitvec",
@@ -5676,13 +5674,13 @@ dependencies = [
 [[package]]
 name = "rockbound"
 version = "1.0.0"
-source = "git+https://github.com/sovereign-labs/rockbound?rev=ec8e2050d3a293e3b1f8ce424085b684ccb44329#ec8e2050d3a293e3b1f8ce424085b684ccb44329"
+source = "git+https://github.com/sovereign-labs/rockbound?rev=dfd0624c32f5fb363c2190e9d911605663f7d693#dfd0624c32f5fb363c2190e9d911605663f7d693"
 dependencies = [
  "anyhow",
  "once_cell",
  "prometheus",
  "rocksdb",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -6859,6 +6857,7 @@ dependencies = [
  "sov-attester-incentives",
  "sov-bank",
  "sov-modules-api",
+ "sov-operator-incentives",
  "sov-paymaster",
  "sov-prover-incentives",
  "sov-rollup-interface",
@@ -6888,9 +6887,8 @@ name = "sov-demo-prover-guest-avail-risc0"
 version = "0.1.0"
 dependencies = [
  "demo-stf",
- "getrandom 0.2.16",
- "risc0-zkvm 2.3.1",
- "risc0-zkvm-platform 2.0.3",
+ "risc0-zkvm 1.2.6",
+ "risc0-zkvm-platform 1.2.6",
  "sov-address",
  "sov-avail-adapter",
  "sov-kernels",
@@ -6949,8 +6947,8 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "bincode",
- "risc0-zkvm 1.2.6",
- "risc0-zkvm-platform 1.2.6",
+ "risc0-zkvm 2.3.1",
+ "risc0-zkvm-platform 2.0.3",
  "serde",
  "sov-rollup-interface",
 ]
@@ -7048,10 +7046,10 @@ dependencies = [
  "derive_more 1.0.0",
  "schemars 0.8.22",
  "serde",
- "sov-bank",
  "sov-modules-api",
  "sov-rollup-interface",
  "sov-state",
+ "strum 0.26.3",
  "thiserror 1.0.69",
  "tracing",
 ]
@@ -7103,8 +7101,8 @@ dependencies = [
  "digest 0.10.7",
  "ed25519-dalek 2.1.1",
  "hex",
- "risc0-zkvm 1.2.6",
- "risc0-zkvm-platform 1.2.6",
+ "risc0-zkvm 2.3.1",
+ "risc0-zkvm-platform 2.0.3",
  "schemars 0.8.22",
  "serde",
  "sha2 0.10.8",
@@ -7170,6 +7168,22 @@ dependencies = [
  "sov-metrics",
  "sov-modules-macros",
  "sov-rollup-interface",
+]
+
+[[package]]
+name = "sov-synthetic-load"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "borsh",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "schemars 0.8.22",
+ "serde",
+ "sov-modules-api",
+ "sov-rollup-interface",
+ "sov-state",
+ "strum 0.26.3",
 ]
 
 [[package]]
@@ -7242,20 +7256,6 @@ dependencies = [
  "proc-macro2",
  "sov-universal-wallet-macro-helpers",
  "syn 2.0.104",
-]
-
-[[package]]
-name = "sov-value-setter"
-version = "0.3.0"
-dependencies = [
- "anyhow",
- "borsh",
- "schemars 0.8.22",
- "serde",
- "sov-modules-api",
- "sov-state",
- "strum 0.26.3",
- "thiserror 1.0.69",
 ]
 
 [[package]]

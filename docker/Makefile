@@ -36,3 +36,18 @@ postgres:
 	-docker volume rm docker_pgadmin-data
 	@echo "Starting fresh PostgreSQL environment..."
 	docker compose -f $(DOCKER_COMPOSE_DIR)/docker-compose.postgres.yml up
+
+enable-chaos-std:
+	./toxiproxy/remove_toxics.sh
+	./toxiproxy/enable_toxics.sh
+	./toxiproxy/status_chaos.sh
+
+enable-chaos-brutal:
+	./toxiproxy/remove_toxics.sh
+	TIMEOUT_RATIO=0.9 LATENCY_RATIO=0.1 LIMIT_DATA_RATIO=0.4 ./toxiproxy/enable_toxics.sh
+	./toxiproxy/status_chaos.sh
+
+restart-toxiproxy:
+	docker compose restart toxiproxy
+	sleep 5
+	TOXIPROXY_HOST="localhost" ./toxiproxy/configure.sh

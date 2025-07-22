@@ -306,8 +306,8 @@ impl<'a, S: Spec, Acct, Tag, T> GeneratorStateMapper<'a, S, Acct, Tag, T> {
     }
 }
 
-impl<'a, Acct, Tag, S: Spec, T: Default + Clone + 'static> GeneratorState<S>
-    for GeneratorStateMapper<'a, S, Acct, Tag, T>
+impl<Acct, Tag, S: Spec, T: Default + Clone + 'static> GeneratorState<S>
+    for GeneratorStateMapper<'_, S, Acct, Tag, T>
 where
     Acct: Debug
         + Clone
@@ -365,6 +365,29 @@ where
         }
     }
 
+    fn has_tag(&self, addr: &<S as Spec>::Address, tag: Self::Tag) -> bool {
+        self.0
+            .tags
+            .get(&tag)
+            .map(|tag_holders| tag_holders.contains(addr))
+            .unwrap_or(false)
+    }
+
+    fn get_token(&self, id: &TokenId) -> Option<TokenInfo> {
+        self.0.tokens.get(id).cloned()
+    }
+
+    fn update_token(&mut self, id: TokenId, info: TokenInfo) {
+        self.0.tokens.insert(id, info);
+    }
+
+    fn get_random_token(
+        &self,
+        u: &mut arbitrary::Unstructured<'_>,
+    ) -> arbitrary::Result<(TokenId, TokenInfo)> {
+        self.0.tokens.random_entry(u).map(|(k, v)| (*k, v.clone()))
+    }
+
     fn update_account(&mut self, address: &S::Address, mut view: Self::AccountView) {
         for action in view.take_tags().into_iter() {
             match action {
@@ -393,24 +416,13 @@ where
         );
     }
 
-    fn has_tag(&self, addr: &<S as Spec>::Address, tag: Self::Tag) -> bool {
-        self.0
-            .tags
-            .get(&tag)
-            .map(|tag_holders| tag_holders.contains(addr))
-            .unwrap_or(false)
-    }
-
     fn generate_account(
         &mut self,
         u: &mut arbitrary::Unstructured<'_>,
     ) -> arbitrary::Result<(S::Address, Self::AccountView)> {
         let private_key: <<S as Spec>::CryptoSpec as CryptoSpec>::PrivateKey =
             Arbitrary::arbitrary(u)?;
-        let address: S::Address = private_key
-            .pub_key()
-            .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>()
-            .into();
+        let address: S::Address = private_key.pub_key().credential_id().into();
 
         // If an account already exist with that address panic because that means our source of randomness is flawed!
         // There is only a vanishingly small change that two randomly generated addressed are the same
@@ -422,21 +434,6 @@ where
 
         self.0.accounts.insert(address.clone(), account.clone());
         Ok((address, (&account).into()))
-    }
-
-    fn get_token(&self, id: &TokenId) -> Option<TokenInfo> {
-        self.0.tokens.get(id).cloned()
-    }
-
-    fn update_token(&mut self, id: TokenId, info: TokenInfo) {
-        self.0.tokens.insert(id, info);
-    }
-
-    fn get_random_token(
-        &self,
-        u: &mut arbitrary::Unstructured<'_>,
-    ) -> arbitrary::Result<(TokenId, TokenInfo)> {
-        self.0.tokens.random_entry(u).map(|(k, v)| (*k, v.clone()))
     }
 }
 

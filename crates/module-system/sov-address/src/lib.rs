@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 #[cfg(feature = "evm")]
-pub use ethereum_address::{EthereumAddress, MultiAddressEvm};
+pub use ethereum_address::{EthereumAddress, EvmCryptoSpec, MultiAddressEvm};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sov_modules_api::macros::UniversalWallet;

@@ -17,11 +17,9 @@ workspace = true
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 axum-server = { workspace = true }
-backon = { workspace = true }
 borsh = { workspace = true }
 derivative = { workspace = true }
 derive_more = { workspace = true }
-futures = { workspace = true }
 jsonschema = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 serde = { workspace = true }
@@ -71,10 +69,6 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 rockbound = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 
-[dev-dependencies]
-proptest = { workspace = true }
-sov-test-utils = { path = ".", features = ["arbitrary"] }
-
 [features]
 arbitrary = [
     "ethereum-types/arbitrary",
@@ -90,6 +84,5 @@ arbitrary = [
     "sov-uniqueness/arbitrary",
     "sov-mock-da/arbitrary",
     "sov-bank/arbitrary",
-    "sov-test-utils/arbitrary",
     "sov-paymaster/arbitrary",
 ]

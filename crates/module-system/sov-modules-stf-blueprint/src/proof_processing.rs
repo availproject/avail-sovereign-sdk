@@ -20,7 +20,7 @@ const LOG_PREFIX: &str = "Returning early from the proof processing workflow";
 // 3. Verify the proof via the `ProofProcessor` capability.
 // 4. Return the proof receipt.
 // If any of the steps fail, the proof processing workflow is aborted and returns a `ProofReceipt` with a `ProofOutcome::Invalid`` outcome.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub(crate) fn process_proof<S, RT>(
     runtime: &mut RT,
     slot_gas: &S::Gas,

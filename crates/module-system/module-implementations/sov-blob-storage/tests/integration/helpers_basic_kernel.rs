@@ -22,9 +22,13 @@ pub fn setup_basic_kernel() -> (TestData<S>, TestRunner<BasicRT>) {
     // we know. We leave the other values untouched.
     let genesis_config = HighLevelZkGenesisConfig::generate_with_additional_accounts(2);
     let preferred_sequencer = genesis_config.initial_sequencer.clone();
-    let user_account = genesis_config.additional_accounts.first().unwrap().clone();
+    let user_account = genesis_config
+        .additional_accounts()
+        .first()
+        .unwrap()
+        .clone();
 
-    let regular_sequencer = genesis_config.additional_accounts[1].clone();
+    let regular_sequencer = genesis_config.additional_accounts()[1].clone();
     let regular_sequencer_da_address = MockAddress::new([42; 32]);
 
     let user_stake = <S as Spec>::Gas::from(TEST_DEFAULT_USER_STAKE);

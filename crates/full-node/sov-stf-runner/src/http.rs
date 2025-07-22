@@ -7,6 +7,7 @@ use axum::http::StatusCode;
 use axum::ServiceExt;
 use futures_util::sink::SinkExt;
 use futures_util::stream::StreamExt;
+use jsonrpsee::server::ServerConfig;
 use jsonrpsee::RpcModule;
 use tokio::sync::watch;
 use tower::BoxError;
@@ -69,10 +70,12 @@ pub fn rpc_module_to_router(
 ) -> (axum::Router, jsonrpsee::server::ServerHandle) {
     let (stop_handle, server_handle) = jsonrpsee::server::stop_channel();
 
-    let rpc_service = jsonrpsee::server::Server::builder()
-        // TODO: Into config
+    // TODO: Into config.toml
+    let config = ServerConfig::builder()
         .max_connections(10_000)
         .max_subscriptions_per_connection(100)
+        .build();
+    let rpc_service = jsonrpsee::server::ServerBuilder::with_config(config)
         .to_service_builder()
         .build(methods.clone(), stop_handle);
 
@@ -176,7 +179,7 @@ async fn handle_socket_read(
                     Ok((rpc_response, mut receiver)) => {
                         tracing::trace!("RPC request processed successfully: {}", rpc_response);
                         if socket_responses
-                            .send(Message::Text(rpc_response))
+                            .send(Message::Text(rpc_response.to_string()))
                             .await
                             .is_err()
                         {
@@ -190,8 +193,9 @@ async fn handle_socket_read(
                                 tracing::trace!("Spawning subscription responses loop");
                                 while let Some(message) = receiver.recv().await {
                                     tracing::trace!("Subscription message received: {}", message);
-                                    if let Err(error) =
-                                        subscription_responses.send(Message::Text(message)).await
+                                    if let Err(error) = subscription_responses
+                                        .send(Message::Text(message.to_string()))
+                                        .await
                                     {
                                         tracing::error!(%error, "Error while sending RPC response");
                                     }
@@ -239,8 +243,8 @@ async fn handle_socket_write(
 #[cfg(test)]
 mod tests {
     use jsonrpsee::core::client::{ClientT, SubscriptionClientT};
+    use jsonrpsee::core::JsonRawValue;
     use jsonrpsee::ws_client::WsClientBuilder;
-    use jsonrpsee::SubscriptionMessage;
 
     use super::*;
 
@@ -275,10 +279,11 @@ mod tests {
                         match pending.accept().await {
                             Ok(sub) => {
                                 tracing::info!("Subscription accepted successfully");
-
+                                let _method = sub.method_name();
+                                let _sub_id = sub.subscription_id();
                                 for i in 0..usize::MAX {
-                                    let msg = SubscriptionMessage::from_json(&i).unwrap();
-                                    if sub.send(msg).await.is_err() {
+                                    let r = JsonRawValue::from_string(i.to_string()).unwrap();
+                                    if sub.send(r).await.is_err() {
                                         break;
                                     };
                                     tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -325,7 +330,7 @@ mod tests {
         let (addr, shutdown_sender) = build_and_start_test_server().await;
 
         let ws_client = WsClientBuilder::default()
-            .build(&format!("ws://{}/rpc", addr))
+            .build(&format!("ws://{addr}/rpc"))
             .await?;
 
         for _ in 0..10 {
@@ -344,7 +349,7 @@ mod tests {
         let (addr, shutdown_sender) = build_and_start_test_server().await;
 
         let ws_client = WsClientBuilder::default()
-            .build(&format!("ws://{}/rpc", addr))
+            .build(&format!("ws://{addr}/rpc"))
             .await?;
 
         let mut subscription = ws_client
@@ -376,7 +381,7 @@ mod tests {
         let (addr, shutdown_sender) = build_and_start_test_server().await;
 
         let ws_client = WsClientBuilder::default()
-            .build(&format!("ws://{}/rpc", addr))
+            .build(&format!("ws://{addr}/rpc"))
             .await?;
 
         let mut subscription = ws_client

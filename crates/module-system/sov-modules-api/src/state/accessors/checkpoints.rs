@@ -235,7 +235,7 @@ pub mod native {
         pub(in crate::state) checkpoint: &'a mut StateCheckpoint<S>,
     }
 
-    impl<'a, S: Spec> UniversalStateAccessor for AccessoryStateCheckpoint<'a, S> {
+    impl<S: Spec> UniversalStateAccessor for AccessoryStateCheckpoint<'_, S> {
         fn get_size(&mut self, namespace: sov_state::Namespace, key: &SlotKey) -> Option<u32> {
             self.checkpoint.get_size(namespace, key)
         }

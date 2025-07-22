@@ -326,6 +326,10 @@ fn authenticate_blob_data(
     blob: &BlobWithSender,
     blob_row_proof: BlobProof,
 ) -> Result<usize, NamespaceValidationError> {
+    if namespace == Namespace::PARITY_SHARE {
+        // Parity share namespace should not be verified
+        return Err(InvalidBlobData(BlobDataError::UnexpectedBlobs));
+    }
     // The accumulator length is considered trusted as a record of the bytes that the rollup saw.
     // This does not mean that it can be trusted to contain the correct bytes.
     let blob_data_read = blob.blob.accumulator();
@@ -358,23 +362,13 @@ fn authenticate_blob_data(
         // Subrange verification
         {
             let RangeProof { shares, proof, .. } = sub_proof;
-            // TODO: Why raw leaves are built from this thing? It should be built from namespace data
-            let mut sov_shares = Vec::with_capacity(shares.len());
-            for (share_idx, share) in shares.into_iter().enumerate() {
-                let Ok(sov_share) = crate::shares::SovShare::new(share) else {
-                    return Err(InvalidBlobData(BlobDataError::NonMatchingShare));
-                };
+            for (share_idx, share) in shares.iter().enumerate() {
                 // The first share of the first range means starting share:
                 // 1. Sequence length
                 // 2. Signer.
                 if range_idx == 0 && share_idx == 0 {
-                    sequence_length = match sov_share.sequence_length() {
-                        Ok(l) => Some(l),
-                        Err(_err) => {
-                            return Err(InvalidBlobData(BlobDataError::NonMatchingShare));
-                        }
-                    };
-                    let Ok(recovered_signer) = sov_share.blob_signer() else {
+                    sequence_length = share.sequence_length().map(u64::from);
+                    let Some(recovered_signer) = share.signer().map(CelestiaAddress) else {
                         return Err(InvalidBlobData(BlobDataError::NonMatchingShare));
                     };
                     if recovered_signer != blob.sender {
@@ -384,7 +378,10 @@ fn authenticate_blob_data(
                 }
                 // Verify blob data matching share data.
                 {
-                    let share_data = sov_share.payload_ref();
+                    let share_data = share
+                        .payload()
+                        // Parity share namespace should not be verified
+                        .ok_or(InvalidBlobData(BlobDataError::UnexpectedBlobs))?;
                     let (blob_data_end, share_data_end) =
                         if (start_blob_data_idx + share_data.len()) >= blob_data_read.len() {
                             (
@@ -401,14 +398,9 @@ fn authenticate_blob_data(
                     }
                     start_blob_data_idx += share_data.len();
                 }
-
-                sov_shares.push(sov_share);
             }
 
-            let raw_leaves = sov_shares
-                .iter()
-                .map(|s| s.raw_inner_ref())
-                .collect::<Vec<_>>();
+            let raw_leaves = shares.iter().map(|s| s.data()).collect::<Vec<_>>();
 
             proof
                 .verify_range(row_root, &raw_leaves, namespace.into())

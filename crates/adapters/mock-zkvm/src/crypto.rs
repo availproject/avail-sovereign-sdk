@@ -4,8 +4,6 @@ use std::hash::Hash;
 use std::str::FromStr;
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use digest::typenum::U32;
-use digest::Digest;
 use ed25519_dalek::{
     Signature as DalekSignature, VerifyingKey as DalekPublicKey, PUBLIC_KEY_LENGTH,
 };
@@ -135,9 +133,7 @@ impl Ed25519PublicKey {
 }
 
 impl sov_rollup_interface::crypto::PublicKey for Ed25519PublicKey {
-    fn credential_id<Hasher: Digest<OutputSize = U32>>(
-        &self,
-    ) -> sov_rollup_interface::crypto::CredentialId {
+    fn credential_id(&self) -> sov_rollup_interface::crypto::CredentialId {
         // The pub key is already 32 bytes, so we don't hash it.
         let data = HexString(*self.bytes());
         sov_rollup_interface::crypto::CredentialId(data)
@@ -215,7 +211,7 @@ impl sov_rollup_interface::crypto::Signature for Ed25519Signature {
 
 #[cfg(feature = "native")]
 fn map_error(e: ed25519_dalek::SignatureError) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, e)
+    std::io::Error::other(e)
 }
 #[cfg(not(feature = "native"))]
 fn map_error(_e: ed25519_dalek::SignatureError) -> std::io::Error {

@@ -14,7 +14,7 @@ pub struct UnmeteredStateWrapper<'a, T> {
     pub(crate) inner: &'a mut T,
 }
 
-impl<'a, T: UniversalStateAccessor> UniversalStateAccessor for UnmeteredStateWrapper<'a, T> {
+impl<T: UniversalStateAccessor> UniversalStateAccessor for UnmeteredStateWrapper<'_, T> {
     fn get_size(&mut self, namespace: sov_state::Namespace, key: &SlotKey) -> Option<u32> {
         self.inner.get_size(namespace, key)
     }
@@ -32,7 +32,7 @@ impl<'a, T: UniversalStateAccessor> UniversalStateAccessor for UnmeteredStateWra
     }
 }
 
-impl<'a, Inner> UnmeteredStateWrapper<'a, Inner> {
+impl<Inner> UnmeteredStateWrapper<'_, Inner> {
     /// Returns a reference to the inner state accessor.
     pub fn inner(&self) -> &Inner {
         self.inner
@@ -44,7 +44,7 @@ impl<'a, Inner> UnmeteredStateWrapper<'a, Inner> {
     }
 }
 
-impl<'a, Inner, N: CompileTimeNamespace> StateReader<N> for UnmeteredStateWrapper<'a, Inner>
+impl<Inner, N: CompileTimeNamespace> StateReader<N> for UnmeteredStateWrapper<'_, Inner>
 where
     Inner: StateReader<N>,
 {
@@ -70,7 +70,7 @@ where
     }
 }
 
-impl<'a, Inner, N: CompileTimeNamespace> StateWriter<N> for UnmeteredStateWrapper<'a, Inner>
+impl<Inner, N: CompileTimeNamespace> StateWriter<N> for UnmeteredStateWrapper<'_, Inner>
 where
     Inner: StateWriter<N>,
 {

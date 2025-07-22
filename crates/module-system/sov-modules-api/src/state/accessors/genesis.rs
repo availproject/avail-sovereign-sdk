@@ -51,7 +51,7 @@ impl<S: Spec> VersionReader for GenesisStateAccessor<'_, S> {
     }
 }
 
-impl<'a, S: Spec> UniversalStateAccessor for GenesisStateAccessor<'a, S> {
+impl<S: Spec> UniversalStateAccessor for GenesisStateAccessor<'_, S> {
     fn get_size(&mut self, namespace: sov_state::Namespace, key: &SlotKey) -> Option<u32> {
         self.checkpoint.get_size(namespace, key)
     }
@@ -69,11 +69,11 @@ impl<'a, S: Spec> UniversalStateAccessor for GenesisStateAccessor<'a, S> {
     }
 }
 
-impl<'a, S: Spec> GasMeter for GenesisStateAccessor<'a, S> {
+impl<S: Spec> GasMeter for GenesisStateAccessor<'_, S> {
     type Spec = S;
 }
 
-impl<'a, S: Spec> GenesisStateAccessor<'a, S> {
+impl<S: Spec> GenesisStateAccessor<'_, S> {
     /// Extracts all typed events from this working set.
     pub fn take_events(&mut self) -> Vec<TypeErasedEvent> {
         core::mem::take(&mut self.events)
@@ -96,7 +96,7 @@ impl<'a, S: Spec> GenesisStateAccessor<'a, S> {
     }
 }
 
-impl<'a, S: Spec> EventContainer for GenesisStateAccessor<'a, S> {
+impl<S: Spec> EventContainer for GenesisStateAccessor<'_, S> {
     fn add_event<E: 'static + core::marker::Send>(&mut self, event_key: &str, event: E) {
         self.events.push(TypeErasedEvent::new(event_key, event));
     }
@@ -107,9 +107,9 @@ impl<'a, S: Spec> EventContainer for GenesisStateAccessor<'a, S> {
 }
 
 use crate::GenesisState;
-impl<'a, S: Spec> GenesisState<S> for GenesisStateAccessor<'a, S> {}
+impl<S: Spec> GenesisState<S> for GenesisStateAccessor<'_, S> {}
 
-impl<'a, S: Spec> PerBlockCache for GenesisStateAccessor<'a, S> {
+impl<S: Spec> PerBlockCache for GenesisStateAccessor<'_, S> {
     fn put_cached<T: 'static + Send + Sync + BorshSerializedSize>(&mut self, value: T) {
         self.cache.set(value);
     }

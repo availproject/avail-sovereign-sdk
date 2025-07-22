@@ -81,17 +81,25 @@ impl<S: SlotData, B, T: TxReceiptContents> SlotCommit<S, B, T> {
     }
 }
 
+#[derive(Debug, Clone)]
+struct Notification<T> {
+    triggered_at_slot: SlotNumber,
+    notification: T,
+}
+
+type NotificationBacklog<T> = Arc<Mutex<Vec<Notification<T>>>>;
+
 /// Single struct responsible for aggregating and sending all notifications.
 #[derive(Debug, Clone)]
 pub(crate) struct LedgerNotificationService {
     // Regular slots
-    slot_notifications: Arc<Mutex<Vec<SlotNumber>>>,
+    slot_notifications: NotificationBacklog<SlotNumber>,
     pub(crate) slot_subscriptions: tokio::sync::broadcast::Sender<SlotNumber>,
     // Finalized slots
-    finalized_slot_notifications: Arc<Mutex<Vec<SlotNumber>>>,
+    finalized_slot_notifications: NotificationBacklog<SlotNumber>,
     pub(crate) finalized_slot_subscriptions: tokio::sync::watch::Sender<SlotNumber>,
     // Proofs
-    proof_notifications: Arc<Mutex<Vec<AggregatedProofResponse>>>,
+    proof_notifications: NotificationBacklog<AggregatedProofResponse>,
     pub(crate) proof_subscriptions: tokio::sync::broadcast::Sender<AggregatedProofResponse>,
 }
 
@@ -107,43 +115,63 @@ impl LedgerNotificationService {
         }
     }
 
-    pub(crate) fn register_slot_notification(&self, slot_number: SlotNumber) {
+    pub(crate) fn register_slot_notification(
+        &self,
+        triggered_at_slot: SlotNumber,
+        slot_number: SlotNumber,
+    ) {
         self.slot_notifications
             .lock()
             .expect("Slot notification lock is poisoned")
-            .push(slot_number);
+            .push(Notification {
+                triggered_at_slot,
+                notification: slot_number,
+            });
     }
 
-    pub(crate) fn register_finalized_slot_notification(&self, slot_num: SlotNumber) {
+    pub(crate) fn register_finalized_slot_notification(
+        &self,
+        triggered_at_slot: SlotNumber,
+        slot_num: SlotNumber,
+    ) {
         self.finalized_slot_notifications
             .lock()
             .expect("Finalized slot notification lock is poisoned")
-            .push(slot_num);
+            .push(Notification {
+                triggered_at_slot,
+                notification: slot_num,
+            });
     }
 
     pub(crate) fn register_aggregated_proof_notification(
         &self,
+        triggered_at_slot: SlotNumber,
         aggregated_proof: AggregatedProofResponse,
     ) {
         self.proof_notifications
             .lock()
             .expect("Aggregated proof notification lock is poisoned")
-            .push(aggregated_proof);
+            .push(Notification {
+                triggered_at_slot,
+                notification: aggregated_proof,
+            });
     }
 
-    pub(crate) fn send_notifications(&self) {
+    pub(crate) fn send_notifications_for_slot(&self, slot: SlotNumber) {
         {
             let mut slot_notifications = self
                 .slot_notifications
                 .lock()
                 .expect("Slot notification lock is poisoned");
-            let slot_nums = std::mem::take(&mut *slot_notifications);
-            for slot_num in slot_nums {
-                // Notify subscribers.
-                // This call returns an error if there are no subscribers,
-                // so we don't need to check the result
-                let _ = self.slot_subscriptions.send(slot_num);
-            }
+
+            slot_notifications.retain(|slot_num| {
+                if slot_num.triggered_at_slot <= slot {
+                    let _ = self.slot_subscriptions.send(slot_num.notification);
+                    false
+                } else {
+                    true
+                }
+            });
         }
 
         {
@@ -151,11 +179,17 @@ impl LedgerNotificationService {
                 .finalized_slot_notifications
                 .lock()
                 .expect("Finalized slot notification lock is poisoned");
-            let finalized_rollup_heights = std::mem::take(&mut *finalized_slot_notifications);
-            for rollup_height in finalized_rollup_heights {
-                // Notify subscribers. This call returns an error if there are no subscribers, so we don't need to check the result
-                let _ = self.finalized_slot_subscriptions.send(rollup_height);
-            }
+
+            finalized_slot_notifications.retain(|rollup_height| {
+                if rollup_height.triggered_at_slot <= slot {
+                    let _ = self
+                        .finalized_slot_subscriptions
+                        .send(rollup_height.notification);
+                    false
+                } else {
+                    true
+                }
+            });
         }
 
         {
@@ -163,11 +197,22 @@ impl LedgerNotificationService {
                 .proof_notifications
                 .lock()
                 .expect("Proof notification lock is poisoned");
-            let aggregated_proofs = std::mem::take(&mut *proof_notifications);
-            for agg_proof in aggregated_proofs {
-                let _ = self.proof_subscriptions.send(agg_proof);
-            }
+
+            proof_notifications.retain(|agg_proof| {
+                if agg_proof.triggered_at_slot <= slot {
+                    let _ = self
+                        .proof_subscriptions
+                        .send(agg_proof.notification.clone());
+                    false
+                } else {
+                    true
+                }
+            });
         }
+    }
+
+    pub(crate) fn send_notifications(&self) {
+        self.send_notifications_for_slot(SlotNumber::MAX);
     }
 }
 
@@ -207,6 +252,29 @@ impl LedgerDb {
         }
     }
 
+    /// Initialize a new [`LedgerDb`] that shares the LedgerNotificationService
+    /// of the provided ledger_db. It uses the other [`LedgerDb`]s inner reader
+    /// as the starting point.
+    ///
+    /// This is used to create a [`LedgerDb`] used for serving API requests
+    /// and publishing notifications produced by the "core" ledger instance.
+    ///
+    /// In order to provide strong consistency across the REST API
+    /// we need to delay updating the inner reader of such ledger dbs until
+    /// the full execution has completed (including the seqeuncer).
+    ///
+    /// This solves an issue where `/ledger/slots/finalized` would return a slot_number
+    /// then that slot number was used to query module state:
+    /// `/modules/mymodule/state/a?slot_number=slot_number` but would return a invalid
+    /// slot number error because state updates haddn't progogated to module related
+    /// state accessors.
+    pub fn with_shared_notifications(other: &LedgerDb) -> Self {
+        Self {
+            db: Arc::new(RwLock::new(other.clone_reader())),
+            notification_service: other.notification_service.clone(),
+        }
+    }
+
     /// Initialize a new [`LedgerDb`] with the provided [`DeltaReader`].
     pub fn with_reader(reader: DeltaReader) -> anyhow::Result<Self> {
         Ok(Self {
@@ -216,7 +284,7 @@ impl LedgerDb {
     }
 
     /// Replace the underlying reader with a new [`DeltaReader`].
-    pub fn replace_reader(&mut self, reader: DeltaReader) {
+    pub fn replace_reader(&self, reader: DeltaReader) {
         let mut existing_reader = self.db.write().expect(DB_LOCK_POISONED);
         *existing_reader = reader;
     }
@@ -293,7 +361,6 @@ impl LedgerDb {
         data_to_commit: SlotCommit<S, B, T>,
         state_root: &[u8],
     ) -> anyhow::Result<SchemaBatch> {
-        // Create a scope to ensure that the lock is released before we materialize data
         let mut current_item_numbers = self.get_next_items_numbers()?;
         let mut schema_batch = SchemaBatch::new();
 
@@ -353,7 +420,7 @@ impl LedgerDb {
         self.put_slot(&slot_to_store, &slot_number, &mut schema_batch)?;
 
         self.notification_service
-            .register_slot_notification(current_item_numbers.slot_number);
+            .register_slot_notification(slot_number, slot_number);
 
         Ok(schema_batch)
     }
@@ -363,16 +430,23 @@ impl LedgerDb {
         self.notification_service.send_notifications();
     }
 
+    /// Send all notifications for slots <= `slot_num`.
+    pub fn send_notifications_for_slot(&self, slot_num: SlotNumber) {
+        self.notification_service
+            .send_notifications_for_slot(slot_num);
+    }
+
     /// Materializes latest finalized slot and registers notification.
     pub fn materialize_latest_finalize_slot(
         &self,
+        current_slot_num: SlotNumber,
         slot_num: SlotNumber,
     ) -> anyhow::Result<SchemaBatch> {
         let mut schema_batch = SchemaBatch::new();
         schema_batch.put::<FinalizedSlots>(&LatestFinalizedSlotSingleton, &slot_num)?;
         // Register notification for the slot number that was finalized. It will get *sent* after the slot is finished committing.
         self.notification_service
-            .register_finalized_slot_notification(slot_num);
+            .register_finalized_slot_notification(current_slot_num, slot_num);
         Ok(schema_batch)
     }
 
@@ -402,6 +476,7 @@ impl LedgerDb {
     /// Materializes aggregated zk proof
     pub fn materialize_aggregated_proof(
         &self,
+        current_slot_num: SlotNumber,
         agg_proof: SerializedAggregatedProof,
     ) -> anyhow::Result<SchemaBatch> {
         let mut schema_batch = SchemaBatch::new();
@@ -409,7 +484,10 @@ impl LedgerDb {
         schema_batch.put::<ProofByUniqueId>(&ProofUniqueId(unique_id), &agg_proof)?;
 
         self.notification_service
-            .register_aggregated_proof_notification(AggregatedProofResponse { proof: agg_proof });
+            .register_aggregated_proof_notification(
+                current_slot_num,
+                AggregatedProofResponse { proof: agg_proof },
+            );
         Ok(schema_batch)
     }
 

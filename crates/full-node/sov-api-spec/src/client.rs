@@ -142,11 +142,11 @@ impl Client {
         &self,
         tx_hash: TxHash,
     ) -> WsSubscription<types::TxInfo> {
-        self.subscribe_to_ws(&format!("/sequencer/txs/{}/ws", tx_hash))
+        self.subscribe_to_ws(&format!("/sequencer/txs/{tx_hash}/ws"))
             .await
     }
 
-    async fn subscribe_to_ws<T: serde::de::DeserializeOwned>(
+    pub async fn subscribe_to_ws<T: serde::de::DeserializeOwned>(
         &self,
         path: &str,
     ) -> WsSubscription<T> {

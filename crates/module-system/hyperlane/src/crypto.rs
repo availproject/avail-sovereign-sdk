@@ -227,7 +227,7 @@ impl EthSignHash {
         let value = value.as_ref();
         let value_len = value.len().to_string();
         charge_gas_for_hashing(
-            ETH_SIGNED_MESSAGE_PREFIX.len() + value_len.as_bytes().len() + value.len(),
+            ETH_SIGNED_MESSAGE_PREFIX.len() + value_len.len() + value.len(),
             gas_meter,
         )?;
         Ok(Self(

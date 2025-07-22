@@ -81,6 +81,7 @@ where
     checkpoint_sender: watch::Sender<StateCheckpoint<S>>,
     api_state: ApiState<S>,
     config: SequencerConfig<S::Da, S::Address, StdSequencerConfig>,
+    api_ledger_db: LedgerDb,
 }
 
 /// An error that indicates that the transaction could not be added to the batch.
@@ -104,6 +105,7 @@ where
     Da: DaService<Spec = S::Da>,
 {
     /// Creates `StdSequencer`
+    #[allow(clippy::too_many_arguments)]
     pub async fn create(
         da: Da,
         state_update_receiver: StateUpdateReceiver<S::Storage>,
@@ -111,6 +113,7 @@ where
         storage_path: &Path,
         config: &SequencerConfig<S::Da, S::Address, StdSequencerConfig>,
         ledger_db: LedgerDb,
+        api_ledger_db: LedgerDb,
         shutdown_sender: watch::Sender<()>,
     ) -> anyhow::Result<(Arc<Self>, Vec<JoinHandle<()>>)> {
         let shutdown_receiver = shutdown_sender.subscribe();
@@ -167,6 +170,7 @@ where
             runtime: Rt::default(),
             checkpoint_sender,
             config: config.clone(),
+            api_ledger_db,
         });
 
         handles.push(tokio::spawn({
@@ -529,13 +533,15 @@ where
 
     async fn update_state(
         &self,
-        StateUpdateInfo {
+        state_update_info: StateUpdateInfo<S::Storage>,
+    ) -> anyhow::Result<()> {
+        let StateUpdateInfo {
             storage,
             slot_number,
+            ledger_reader,
             ..
-        }: StateUpdateInfo<S::Storage>,
-    ) -> anyhow::Result<()> {
-        let checkpoint = StateCheckpoint::new(storage, &Rt::default().kernel());
+        } = &state_update_info;
+        let checkpoint = StateCheckpoint::new(storage.clone(), &Rt::default().kernel());
 
         tracing::debug!(
             %slot_number,
@@ -549,6 +555,9 @@ where
                 .ok();
             inner.checkpoint = Some(checkpoint);
         }
+
+        self.api_ledger_db.replace_reader(ledger_reader.clone());
+        self.api_ledger_db.send_notifications_for_slot(*slot_number);
 
         if self.config.automatic_batch_production {
             match self.produce_batch().await {

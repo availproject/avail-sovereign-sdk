@@ -59,7 +59,7 @@ impl From<ProcessAttestationErrors> for InvalidProofError {
     fn from(error: ProcessAttestationErrors) -> Self {
         match error {
             ProcessAttestationErrors::AttesterSlashedNoRevert(reason) => {
-                InvalidProofError::ProverSlashed(format!("{}", reason))
+                InvalidProofError::ProverSlashed(format!("{reason}"))
             }
             ProcessAttestationErrors::InvalidAttestationFormat
             | ProcessAttestationErrors::AttesterNotBonded
@@ -67,7 +67,7 @@ impl From<ProcessAttestationErrors> for InvalidProofError {
             | ProcessAttestationErrors::InvalidTransitionInvariant
             | ProcessAttestationErrors::InvalidOperatingMode
             | ProcessAttestationErrors::InvalidBondFormat => {
-                InvalidProofError::PreconditionNotMet(format!("{}", error))
+                InvalidProofError::PreconditionNotMet(format!("{error}"))
             }
             ProcessAttestationErrors::RewardTransferFailure(e) => {
                 InvalidProofError::RewardFailure(e)
@@ -111,7 +111,7 @@ impl From<ProcessChallengeErrors> for InvalidProofError {
             }
             ProcessChallengeErrors::ChallengerNotBonded
             | ProcessChallengeErrors::InvalidOperatingMode => {
-                InvalidProofError::PreconditionNotMet(format!("{}", error))
+                InvalidProofError::PreconditionNotMet(format!("{error}"))
             }
             ProcessChallengeErrors::RewardTransferFailure(e) => InvalidProofError::RewardFailure(e),
             ProcessChallengeErrors::StateAccessError(e) => {
@@ -291,7 +291,6 @@ where
     /// Try to process a zk proof if the challenger is bonded.
     /// Same comment as above for the [`AttesterIncentives::process_attestation`] method: if we have a slashable
     /// offense, we want to be able to exit gracefully.
-
     #[allow(clippy::type_complexity)]
     pub fn process_challenge<State: TxState<S> + GetGasPrice<Spec = S>>(
         &mut self,
@@ -340,8 +339,7 @@ where
             Err(_err) => {
                 let reason = SlashingReason::NoInvalidTransition;
                 error!(reason = ?reason, "Challenger slashed");
-                self.slash_challenger(sender, state)
-                    .map_err(Into::<anyhow::Error>::into)?;
+                self.slash_challenger(sender, state)?;
 
                 // The state won't be reverted.
                 return Err(ProcessChallengeErrors::ChallengerSlashedNoRevert(reason));
@@ -368,8 +366,7 @@ where
 
                 if let Some(slashing_reason) = check {
                     error!(reason = ?slashing_reason, "Challenger slashed: Invalid outputs");
-                    self.slash_challenger(sender, state)
-                        .map_err(Into::<anyhow::Error>::into)?;
+                    self.slash_challenger(sender, state)?;
 
                     // The state won't be reverted.
                     return Err(ProcessChallengeErrors::ChallengerSlashedNoRevert(
@@ -398,8 +395,7 @@ where
                 // Slash the challenger
                 let reason = SlashingReason::InvalidZkProof;
                 error!(reason = ?reason, error = ?err, "Challenger slashed: Invalid zk proof");
-                self.slash_challenger(sender, state)
-                    .map_err(Into::<anyhow::Error>::into)?;
+                self.slash_challenger(sender, state)?;
 
                 // The state won't be reverted.
                 Err(ProcessChallengeErrors::ChallengerSlashedNoRevert(reason))

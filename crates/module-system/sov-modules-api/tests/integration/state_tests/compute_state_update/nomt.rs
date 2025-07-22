@@ -118,9 +118,7 @@ fn check_malicious_case(native_case: TestCase, zk_case: TestCase, expected_error
                 let error_message = err.to_string();
                 assert!(
                     error_message.contains(expected_error),
-                    "Error message does not contain expected text. Error: {}, expected pattern: '{}'",
-                    error_message,
-                    expected_error
+                    "Error message does not contain expected text. Error: {error_message}, expected pattern: '{expected_error}'"
                 );
                 return;
             }

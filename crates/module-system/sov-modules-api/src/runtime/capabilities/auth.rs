@@ -30,7 +30,7 @@ pub fn config_chain_id() -> u64 {
 /// A batch sent by an unregistered sequencer contains only one transaction.
 pub struct BatchFromUnregisteredSequencer {
     /// The transaction.
-    pub tx: RawTx,
+    pub tx: FullyBakedTx,
     /// Id of the batch.
     pub id: [u8; 32],
 }
@@ -153,7 +153,10 @@ where
         batch: &BatchFromUnregisteredSequencer,
         pre_exec_ws: &mut Accessor,
     ) -> Result<AuthenticationOutput<S, Self::Decodable>, UnregisteredAuthenticationError> {
-        crate::capabilities::authenticate::<_, S, Rt>(&batch.tx.data, &Rt::CHAIN_HASH, pre_exec_ws)
+        let AuthenticatorInput::Standard(input) = borsh::from_slice(&batch.tx.data)
+            .map_err(|_| UnregisteredAuthenticationError::InvalidAuthenticationDiscriminant)?;
+
+        crate::capabilities::authenticate::<_, S, Rt>(&input.data, &Rt::CHAIN_HASH, pre_exec_ws)
             .map_err(|e| match e {
                 AuthenticationError::FatalError(err, hash) => {
                     UnregisteredAuthenticationError::FatalError(err, hash)
@@ -264,6 +267,9 @@ pub enum UnregisteredAuthenticationError {
     /// Transaction run out of gas
     #[error("Transaction ran out of gas, error: {0}")]
     OutOfGas(String),
+    /// The transaction authentication failed because the authentication discriminant was invalid.
+    #[error("Invalid authentication discriminant")]
+    InvalidAuthenticationDiscriminant,
 }
 
 /// The different types of data that can be used to verify transaction uniqueness

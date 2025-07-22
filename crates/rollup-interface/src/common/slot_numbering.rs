@@ -278,3 +278,81 @@ fn test_visible_slot_number() {
     assert_eq!(number.get(), 5);
     assert_eq!(output.get(), 5);
 }
+
+/// A rollup "block number". Rollup heights increase in order (1, 2, 3, ...),
+/// regardless of what happens on the underlying DA layer.
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    derive_more::Display,
+    derive_more::FromStr,
+    serde::Serialize,
+    serde::Deserialize,
+    borsh::BorshDeserialize,
+    borsh::BorshSerialize,
+)]
+pub struct RollupHeight(u64);
+
+impl std::fmt::Debug for RollupHeight {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.get())
+    }
+}
+
+impl RollupHeight {
+    /// The genesis rollup height.
+    pub const GENESIS: Self = Self(0);
+
+    /// The height of the first rollup block after genesis.
+    pub const ONE: Self = Self(1);
+
+    /// Create a new rollup height from a u64.
+    pub fn new(height: u64) -> Self {
+        Self(height)
+    }
+
+    /// Returns the inner value of a rollup height.
+    pub fn get(&self) -> u64 {
+        self.0
+    }
+
+    /// Increment a rollup height by one.
+    pub fn incr(&mut self) {
+        self.0 += 1;
+    }
+
+    /// See [`u64::checked_sub`]
+    #[must_use]
+    pub fn checked_sub(self, rhs: u64) -> Option<Self> {
+        self.0.checked_sub(rhs).map(Self)
+    }
+
+    /// See [`u64::checked_add`]
+    #[must_use]
+    pub fn checked_add(self, rhs: Self) -> Option<Self> {
+        self.0.checked_add(rhs.0).map(Self)
+    }
+
+    /// See [`u64::saturating_sub`]
+    #[must_use]
+    pub fn saturating_sub(self, rhs: u64) -> Self {
+        Self(self.0.saturating_sub(rhs))
+    }
+
+    /// See [`u64::saturating_add`]
+    #[must_use]
+    pub fn saturating_add(self, rhs: u64) -> Self {
+        Self(self.0.saturating_add(rhs))
+    }
+
+    /// Convert a rollup height to a slot number
+    #[must_use]
+    pub fn to_slot_number(&self) -> SlotNumber {
+        SlotNumber::new_dangerous(self.0)
+    }
+}

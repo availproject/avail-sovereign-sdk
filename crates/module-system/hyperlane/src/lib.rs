@@ -241,6 +241,31 @@ impl HyperlaneAddress for Base58Address {
     }
 }
 
+#[cfg(feature = "evm")]
+impl HyperlaneAddress for sov_address::EthereumAddress {
+    fn to_sender(&self) -> HexHash {
+        const START_INDEX: usize = 32 - 20; // EthereumAddress is 20 bytes
+                                            // Pad the address with leading zeros to 32 bytes. This is the hyperlane convention
+        let mut bytes = [0u8; 32];
+        bytes[START_INDEX..].copy_from_slice(self.as_ref());
+        bytes.into()
+    }
+
+    fn from_sender(recipient: HexHash) -> anyhow::Result<Self> {
+        const START_INDEX: usize = 32 - 20;
+        // Check that the address is padded with leading zeros to match the hyperlane convention.
+        let (padding, address) = recipient.0.split_at(START_INDEX);
+
+        // Ensure padding is all zeros:
+        anyhow::ensure!(
+            padding.iter().all(|&byte| byte == 0),
+            "Invalid address - not enough leading zeros"
+        );
+
+        Self::try_from(address)
+    }
+}
+
 /// A module that can receive messages via the hyperlane protocol.
 ///
 /// This module may be a "wrapper" module, which internally dispatches to several
@@ -324,5 +349,41 @@ mod tests {
         let sender = address.to_sender();
         let recovered = Address::from_sender(sender).unwrap();
         assert_eq!(address, recovered);
+    }
+
+    #[cfg(feature = "evm")]
+    #[test]
+    fn test_ethereum_address_conversion() {
+        use std::str::FromStr;
+
+        let address =
+            sov_address::EthereumAddress::from_str("0x70d3a94e545c64730032D6dd01f87C686E455414")
+                .unwrap();
+        let sender = address.to_sender();
+
+        // Verify that the sender has leading zeros (12 bytes of padding for 20-byte address)
+        assert_eq!(&sender.0[0..12], &[0u8; 12]);
+
+        let recovered = sov_address::EthereumAddress::from_sender(sender).unwrap();
+        assert_eq!(address, recovered);
+    }
+
+    #[cfg(feature = "evm")]
+    #[test]
+    fn test_ethereum_address_invalid_padding() {
+        // Create a sender with non-zero padding
+        let mut invalid_sender = [0u8; 32];
+        invalid_sender[0] = 1; // Non-zero padding
+        invalid_sender[12..].copy_from_slice(&[
+            0x74, 0x2d, 0x35, 0xcc, 0x66, 0x34, 0xc0, 0x53, 0x29, 0x25, 0xa3, 0xb8, 0x44, 0xbc,
+            0x9e, 0x75, 0x95, 0xf8, 0xb3, 0xd0,
+        ]);
+
+        let result = sov_address::EthereumAddress::from_sender(invalid_sender.into());
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid address - not enough leading zeros"));
     }
 }

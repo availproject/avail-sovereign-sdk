@@ -75,7 +75,7 @@ pub struct PartialTransaction<S: Spec> {
 impl<S: Spec> From<PartialTransaction<S>> for AuthorizationData<S> {
     fn from(value: PartialTransaction<S>) -> AuthorizationData<S> {
         let pub_key = value.sender_pub_key.clone();
-        let credential_id = pub_key.credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>();
+        let credential_id = pub_key.credential_id();
         let generation = value.generation;
         let default_address = credential_id.into();
         let credentials = Credentials::new(pub_key);

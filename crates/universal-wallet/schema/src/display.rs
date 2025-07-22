@@ -93,7 +93,7 @@ impl<'a, W> Output<'a, W> {
     }
 }
 
-impl<'a, W: core::fmt::Write> core::fmt::Write for Output<'a, W> {
+impl<W: core::fmt::Write> core::fmt::Write for Output<'_, W> {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         if self.peeking() {
             return Ok(());
@@ -267,7 +267,7 @@ impl<'a, 'fmt, W> DisplayVisitor<'a, 'fmt, W> {
     ) -> Delimiters {
         let first_child_is_primitive = schema
             .resolve_or_err(&tuple.fields[0].value)
-            .map_or(false, |v| v.is_primitive());
+            .is_ok_and(|v| v.is_primitive());
 
         if tuple.fields.len() == 1
             && !(tuple_displays_as_enum_contents(context) && first_child_is_primitive)
@@ -330,7 +330,7 @@ impl<'a, 'fmt, W> DisplayVisitor<'a, 'fmt, W> {
                 }
                 if schema
                     .resolve_or_err(&field.value)
-                    .map_or(false, |inner| inner.is_skip())
+                    .is_ok_and(|inner| inner.is_skip())
                 {
                     continue;
                 }
@@ -413,7 +413,7 @@ impl<'a, 'fmt, W> DisplayVisitor<'a, 'fmt, W> {
     }
 }
 
-impl<'a, 'fmt, W: Write> DisplayVisitor<'a, 'fmt, W> {
+impl<W: Write> DisplayVisitor<'_, '_, W> {
     pub fn read_usize_borsh(&mut self) -> Result<usize, FormatError> {
         if self.input.len() < 4 {
             return Err(FormatError::MissingIntegerInput {
@@ -588,7 +588,7 @@ macro_rules! display_int {
     }};
 }
 
-impl<'a, 'fmt, W: Write, L: LinkingScheme, M> TypeVisitor<L, M> for DisplayVisitor<'a, 'fmt, W> {
+impl<W: Write, L: LinkingScheme, M> TypeVisitor<L, M> for DisplayVisitor<'_, '_, W> {
     type Arg = Context;
     type ReturnType = Result<(), FormatError>;
     fn visit_enum(
@@ -863,13 +863,13 @@ impl<'a, 'fmt, W: Write, L: LinkingScheme, M> TypeVisitor<L, M> for DisplayVisit
             Primitive::Float32 => {
                 let value = self.input.advance(4)?;
                 let value = f32::from_le_bytes(value.try_into().unwrap());
-                write!(self.output, "{}", value)?;
+                write!(self.output, "{value}")?;
                 Ok(())
             }
             Primitive::Float64 => {
                 let value = self.input.advance(8)?;
                 let value = f64::from_le_bytes(value.try_into().unwrap());
-                write!(self.output, "{}", value)?;
+                write!(self.output, "{value}")?;
                 Ok(())
             }
             Primitive::Boolean => {
@@ -913,7 +913,7 @@ impl<'a, 'fmt, W: Write, L: LinkingScheme, M> TypeVisitor<L, M> for DisplayVisit
                     .or(Err(FormatError::MissingStringLength))?;
                 let content = self.input.advance(len)?;
                 let content = std::str::from_utf8(content)?;
-                write!(self.output, "\"{}\"", content)?;
+                write!(self.output, "\"{content}\"")?;
                 Ok(())
             }
             Primitive::Skip { len } => {

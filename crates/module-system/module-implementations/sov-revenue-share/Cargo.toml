@@ -1,0 +1,40 @@
+[package]
+name = "sov-revenue-share"
+description = "A Sovereign SDK module for managing application revenue sharing"
+authors = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+version = { workspace = true }
+readme = "README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+borsh = { workspace = true, features = ["rc"] }
+schemars = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+sov-modules-api = { workspace = true }
+sov-bank = { workspace = true }
+
+[dev-dependencies]
+sov-modules-stf-blueprint = { workspace = true }
+sov-revenue-share = { path = ".", features = ["native"] }
+sov-test-utils = { workspace = true }
+sov-bank = { workspace = true, features = ["native"] }
+strum = { workspace = true }
+
+[features]
+default = []
+native = [
+	"sov-bank/native",
+	"sov-modules-api/native",
+	"sov-modules-stf-blueprint/native",
+	"sov-revenue-share/native"
+]

@@ -22,7 +22,7 @@ fn check_hints_round_trip<T: Serialize + DeserializeOwned + PartialEq + Debug>(h
     let guest = host.simulate_with_hints();
 
     for hint in &hints {
-        println!("TRY READING: {:?}", hint);
+        println!("TRY READING: {hint:?}");
         let received = guest.read_from_host();
         assert_eq!(hint, &received);
     }

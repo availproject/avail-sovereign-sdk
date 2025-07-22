@@ -44,6 +44,25 @@ pub struct SlotKey {
     display_fn: Option<ArcFormatFn>,
 }
 
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for SlotKey {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        const MIN_LEN: usize = 10;
+        const MAX_LEN: usize = 512;
+        // Will include some non alhpanumeric characters, but that's fine.
+        const ASCII_SELECTED: std::ops::RangeInclusive<u8> = b'0'..=b'z';
+
+        let len = u.int_in_range(MIN_LEN..=MAX_LEN)?;
+
+        let key: arbitrary::Result<Vec<u8>> =
+            std::iter::repeat_with(|| u.int_in_range(ASCII_SELECTED.clone()))
+                .take(len)
+                .collect();
+
+        Ok(SlotKey::from(key?))
+    }
+}
+
 // Manually implement PartialOrd to satisfy clippy
 impl PartialOrd for SlotKey {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -183,6 +202,17 @@ impl From<Vec<u8>> for SlotValue {
         Self {
             value: Arc::new(value),
         }
+    }
+}
+
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for SlotValue {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        const MIN_LEN: usize = 32;
+        const MAX_LEN: usize = 1024;
+        let len = u.int_in_range(MIN_LEN..=MAX_LEN)?;
+        let value = u.bytes(len)?.to_vec();
+        Ok(SlotValue::from(value))
     }
 }
 
@@ -454,8 +484,11 @@ impl From<&str> for SlotValue {
 /// A [`Storage`] that is suitable for use in native execution environments
 /// (outside of the zkVM).
 pub trait NativeStorage: Storage {
-    /// Gets the latest version available in the storage.
+    /// Gets the latest version available in the current instance storage.
     fn latest_version(&self) -> SlotNumber;
+
+    /// Gets the latest version that can be committed from any other instance of the storage.
+    fn latest_version_unbound(&self) -> SlotNumber;
 
     /// Returns the value corresponding to the key or None if the key is absent and a proof to
     /// get the value.
@@ -469,6 +502,10 @@ pub trait NativeStorage: Storage {
     /// Get the *global* root hash of the tree at the requested version.
     /// Returns an error if storage is empty or the requests version is not yet available.
     fn get_root_hash(&self, version: SlotNumber) -> anyhow::Result<Self::Root>;
+
+    /// Get the *global* root hash of the tree at the requested version.
+    /// Requested version won't be checked against latest version of this instance of the storage.
+    fn get_root_hash_unbound(&self, version: SlotNumber) -> anyhow::Result<Self::Root>;
 
     /// Get a root hash at the latest version
     fn get_latest_root_hash(&self) -> anyhow::Result<Self::Root> {

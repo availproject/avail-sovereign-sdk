@@ -89,11 +89,7 @@ impl<S: Spec, Tag: Eq + Hash, T> State<S, Tag, T> {
     /// generation may fail.
     pub fn with_account_and_tags(account: AccountState<S, T>, tags: Vec<Tag>) -> Self {
         let mut output = Self::default();
-        let address: <S as Spec>::Address = account
-            .private_key
-            .pub_key()
-            .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>()
-            .into();
+        let address: <S as Spec>::Address = account.private_key.pub_key().credential_id().into();
         for tag in tags {
             output.tags.entry(tag).or_default().insert(address.clone());
         }
@@ -119,11 +115,7 @@ impl<S: Spec, Tag: Eq + Hash, T> State<S, Tag, T> {
 
     /// Insert an outside account into state.
     pub fn insert_account(&mut self, account: AccountState<S, T>) {
-        let address: <S as Spec>::Address = account
-            .private_key
-            .pub_key()
-            .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>()
-            .into();
+        let address: <S as Spec>::Address = account.private_key.pub_key().credential_id().into();
         self.accounts.insert(address, account);
     }
 }

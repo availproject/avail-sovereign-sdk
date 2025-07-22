@@ -336,7 +336,7 @@ fn test_policy_key_from_str() {
         PolicyKey::<MaliciousAddress>::with(Payer(b"evil/policy/".into()), b"innocuouskey".into());
     let key_str = format!("{key}");
     assert_eq!(
-        &format!("payers/evil/policy/{}innocuouskey", POLICY_SEPARATOR),
+        &format!("payers/evil/policy/{POLICY_SEPARATOR}innocuouskey"),
         &key_str
     );
     let recovered_key = PolicyKey::from_str(&key_str).expect("Valid key must deserialize!");
@@ -344,8 +344,7 @@ fn test_policy_key_from_str() {
 
     // Test an invalid address that contains lots of the separator
     assert!(PolicyKey::<MaliciousAddress>::from_str(&format!(
-        "{}{}{}{}",
-        POLICY_SEPARATOR, POLICY_SEPARATOR, POLICY_SEPARATOR, POLICY_SEPARATOR
+        "{POLICY_SEPARATOR}{POLICY_SEPARATOR}{POLICY_SEPARATOR}{POLICY_SEPARATOR}"
     ))
     .is_err());
 }

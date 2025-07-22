@@ -321,7 +321,7 @@ impl<N: ProvableCompileTimeNamespace> ProvableStorageCache<N> {
                             // This unwrap is justified because in the `ReadType::GetSizeValueFetched` branch,
                             // we inserted `Some(slot_value)`.
                             .unwrap_or_else(|| {
-                                panic!("Invalid read for {:?}, provided witness is invalid", key)
+                                panic!("Invalid read for {key:?}, provided witness is invalid")
                             });
 
                         let node_leaf = NodeLeaf::make_leaf::<S::Hasher>(&slot_value);
@@ -374,6 +374,7 @@ impl<N: ProvableCompileTimeNamespace> ProvableStorageCache<N> {
 /// A struct that contains the values read from the DB and the values to be written, both in
 /// deterministic order.
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "test-utils", derive(Clone))]
 pub struct OrderedReadsAndWrites {
     /// Ordered reads.
     pub ordered_reads: Vec<(SlotKey, Option<NodeLeaf>)>,
@@ -381,9 +382,29 @@ pub struct OrderedReadsAndWrites {
     pub ordered_writes: Vec<(SlotKey, Option<SlotValue>)>,
 }
 
-/// A struct that contains the read/write sets for the user and kernel namespaces.
+#[cfg(feature = "arbitrary")]
+impl<'a> arbitrary::Arbitrary<'a> for OrderedReadsAndWrites {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        const MAX_LEN: usize = 100;
+        let writes_len = u.int_in_range(1..=MAX_LEN)?;
 
+        let mut ordered_writes = Vec::with_capacity(writes_len);
+        for _ in 0..writes_len {
+            let key = u.arbitrary::<SlotKey>()?;
+            let value = u.arbitrary::<Option<SlotValue>>()?;
+            ordered_writes.push((key, value));
+        }
+        Ok(OrderedReadsAndWrites {
+            ordered_reads: Vec::new(),
+            ordered_writes,
+        })
+    }
+}
+
+/// A struct that contains the read/write sets for the user and kernel namespaces.
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "test-utils", derive(Clone))]
 pub struct StateAccesses {
     /// The reads and writes to the user namespace
     pub user: OrderedReadsAndWrites,

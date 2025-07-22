@@ -173,8 +173,7 @@ impl<Da: DaSpec, S: InitializableNativeStorage> NativeStorageManager<Da, S> {
                 assert_eq!(
                     Some(slot_hash),
                     self.blocks_to_parent.get(child_hash),
-                    "missing entry in blocks_to_parent for {}",
-                    child_hash
+                    "missing entry in blocks_to_parent for {child_hash}"
                 );
             }
             // There is no duplicates in child hashes.
@@ -216,10 +215,7 @@ impl<Da: DaSpec, S: InitializableNativeStorage> NativeStorageManager<Da, S> {
 
             assert!(
                 has_parent || has_children,
-                "snapshot for {} has no parents({}) or children({})",
-                slot_hash,
-                has_parent,
-                has_children
+                "snapshot for {slot_hash} has no parents({has_parent}) or children({has_children})"
             );
         }
     }

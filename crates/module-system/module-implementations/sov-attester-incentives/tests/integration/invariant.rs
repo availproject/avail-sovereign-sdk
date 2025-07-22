@@ -250,10 +250,9 @@ fn test_cannot_attest_genesis_height() {
                     assert!(!e.is_not_revertable());
                     assert_eq!(msg, "Transition invariant isn't respected");
                 }
-                outcome => panic!(
-                    "Unexpected proof outcome {:?}, expected ProofOutcome::Invalid",
-                    outcome
-                ),
+                outcome => {
+                    panic!("Unexpected proof outcome {outcome:?}, expected ProofOutcome::Invalid")
+                }
             },
         ),
     });

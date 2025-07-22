@@ -30,7 +30,6 @@ We are developing more robust tooling to enable seamless deployment of rollups o
     - [2. Generate the Transaction](#2-generate-the-transaction)
     - [3. Submit the Transaction(s)](#3-submit-the-transactions)
     - [4. Verify the Token Supply](#4-verify-the-token-supply)
-    - [5. Wait for aggregated proof to be available](#5-wait-for-aggregated-proof-to-be-available)
   - [Makefile](#makefile)
   - [Remote setup](#remote-setup)
   - [Several full nodes](#several-full-nodes)
@@ -42,7 +41,7 @@ We are developing more robust tooling to enable seamless deployment of rollups o
 
 ## What is This?
 
-This demo shows how to integrate a State Transition Function (STF) with a Data Availability (DA) layer and a zkVM to create a full
+This demo shows how to integrate a State Transition Function (STF) with a Data Availability (DA) layer.
 zk-rollup. The code in this repository corresponds to running a full-node of the rollup, which executes
 every transaction.
 
@@ -56,23 +55,6 @@ understand how to build your own state transition function, check out at the doc
 If you are looking for a simple rollup with minimal dependencies as a starting point, please have a look here:
 [sov-rollup-starter](https://github.com/Sovereign-Labs/sov-rollup-starter/)
 
-If you don't need ZK guest to be compiled,
-for faster compilation time you can export `export SKIP_GUEST_BUILD=1`environment variable in each terminal you run.
-There are multiple options available:
-- `export SKIP_GUEST_BUILD=1` or `export SKIP_GUEST_BUILD=true`: both guest VMs builds are skipped
-* `export SKIP_GUEST_BUILD=risc0`: only risc0 VM build is skipped, sp1 guest is built.
-* `export SKIP_GUEST_BUILD=sp1`: only sp1 VM build is skipped, risc0 is built.
-* `export SKIP_GUEST_BUILD=0`, `export SKIP_GUEST_BUILD=false` or any other string: both guests are built
-
-By default, demo-rollup disables proving. 
-If you want to enable proving, several options are available:
-
-- `export SOV_PROVER_MODE=skip` Skips verification logic.
-- `export SOV_PROVER_MODE=simulate` Run the rollup verification logic inside the current process.
-- `export SOV_PROVER_MODE=execute` Run the rollup verifier in a zkVM executor.
-- `export SOV_PROVER_MODE=prove` Run the rollup verifier and create a SNARK of execution.
-
-(!) Please note, that if guest binary building is skipped (`SKIP_GUEST_BUILD`), only `SOV_PROVER_MODE=skip` will work, otherwise error about missing binary occurs.
 
 ### Run a local DA layer instance
 
@@ -90,7 +72,6 @@ $ echo $MY_PERSONAL_GITHUB_TOKEN | docker login ghcr.io -u $MY_GITHUB_USERNAME -
 
 ```shell,test-ci
 $ cd examples/demo-rollup/
-$ export SOV_PROVER_MODE=execute
 $ make build
 ```
 
@@ -273,7 +254,6 @@ Usage: sov-cli transactions import from-file <COMMAND>
 Commands:
   bank                 A subcommand for the `Bank` module
   sequencer-registry   A subcommand for the `SequencerRegistry` module
-  value-setter         A subcommand for the `ValueSetter` module
   operator-incentives  A subcommand for the `OperatorIncentives` module
   attester-incentives  A subcommand for the `AttesterIncentives` module
   prover-incentives    A subcommand for the `ProverIncentives` module
@@ -283,6 +263,7 @@ Commands:
   blob-storage         A subcommand for the `BlobStorage` module
   paymaster            A subcommand for the `Paymaster` module
   access-pattern       A subcommand for the `AccessPattern` module
+  synthetic-load       A subcommand for the `SyntheticLoad` module
   help                 Print this message or the help of the given subcommand(s)
 
 Options:
@@ -306,7 +287,7 @@ Adding the following transaction to batch:
       }
     }
   },
-  "chain_hash": "0xb4f2fc7d24b183468da764f7a492dce752484aca0e1b2c4577fde709aabcaade",
+  "chain_hash": "0x672f49a623e325540b52fe25a255a584f4cdf8e2b0c5c1fca13eab8a92c610ed",
   "details": {
     "max_priority_fee_bips": 0,
     "max_fee": "100000000",
@@ -336,17 +317,6 @@ This command will use your default private key.
 ```bash,test-ci,bashtestmd:compare-output
 $ curl -Ss http://127.0.0.1:12346/modules/bank/tokens/token_17732u2vyp35dl6lkgjrdqs4mtuzt7rmy02hq9nqct8wq3g74rqyqz0rt2x/total-supply | jq -c -M
 {"data":{"amount":"1000000","token_id":"token_17732u2vyp35dl6lkgjrdqs4mtuzt7rmy02hq9nqct8wq3g74rqyqz0rt2x"},"meta":{}}
-```
-
-#### 5. Wait for aggregated proof to be available
-
-After all transactions are submitted, let's check that aggregated proofs are available. This might take some time, because proof generation can take time and aggregated proof usually consist of several blocks.
-
-```bash,test-ci
-$ ./../../target/debug/sov-cli node wait-for-aggregated-proof 
-2025-01-23T10:58:58.348458Z  INFO sov_cli::workflows::node: Executing node workflow
-2025-01-23T10:58:58.371326Z  INFO sov_cli::workflows::node: Subscribing for aggregated proofs timeout=120s
-2025-01-23T10:59:02.977603Z  INFO sov_cli::workflows::node: Aggregated proof received aggregated_proof=AggregatedProof { proof: "AAAAAAGLAQAAAAAAAAMAAAAAAAAAAQEBEwAAAAAAAAAVAAAAAAAAAEhdYi6hLFLAP89xCVsbdfDdYwxF/WcFFzZGuIp+kaZW15HRe2qk3GxFnMa2Xuo0MGJo7NASojDOchgMtAoCdO2iXLMO0SPGbTpRLPlbtrPF/uBzNcmrNS3DGRVbg+F/9FWvf9BtOF5XwKXXDUx0D0bCUpD7Uf5COePkcWZQPBAwSJpvtIIdAu2tPFCwoSjEVejceh7HrWRdq44JiFPlxtckKiganGUZTFn5s07HsxKZKBTKDciu3lUHqUayXOjjaK2wdbW1c9SctB6kpXByF0jeeAjzuaBX/IiLBCJ9qImBksAL3mgkTQpGzPOobCRzlm/k90fQ2SsBRlD6Gq6HAc4AAAAAAAAAAAMAAAAAAAAAAAAAAP6mrFuHURIPti//Z7VNLqxmrvMHx93h05TeoeAAAAAA/qasW4dREg+2L/9ntU0urGau8wfH3eHTlN6h4AAAAAD+pqxbh1ESD7Yv/2e1TS6sZq7zB8fd4dOU3qHg", type_: AggregatedProof }
 ```
 
 

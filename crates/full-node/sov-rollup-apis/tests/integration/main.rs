@@ -50,7 +50,7 @@ impl TestData {
         let sequencer_da_address = genesis_config.initial_sequencer.da_address;
         let sequencer_rollup_address = genesis_config.initial_sequencer.user_info.address();
 
-        let user = genesis_config.additional_accounts[0].clone();
+        let user = genesis_config.additional_accounts()[0].clone();
 
         let runtime = RT::default();
 

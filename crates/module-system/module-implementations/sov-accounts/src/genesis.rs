@@ -52,7 +52,7 @@ mod tests {
     use std::str::FromStr;
 
     use sov_modules_api::PublicKey;
-    use sov_test_utils::{TestHasher, TestPublicKey, TestSpec};
+    use sov_test_utils::{TestPublicKey, TestSpec};
 
     use super::*;
 
@@ -63,7 +63,7 @@ mod tests {
         )
         .unwrap();
 
-        let credential_id = pub_key.credential_id::<TestHasher>();
+        let credential_id = pub_key.credential_id();
 
         let config = AccountConfig::<TestSpec> {
             accounts: vec![AccountData {

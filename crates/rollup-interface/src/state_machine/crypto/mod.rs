@@ -54,8 +54,6 @@ impl From<[u8; 32]> for CredentialId {
 mod tests {
     use core::str::FromStr;
 
-    use sov_test_utils::validate_schema;
-
     use super::*;
 
     fn check_str_and_back(credential_id: CredentialId) {
@@ -89,5 +87,16 @@ mod tests {
     #[test_strategy::proptest]
     fn json_schema_is_valid(item: CredentialId) {
         validate_schema(&item).unwrap();
+    }
+
+    #[allow(clippy::result_large_err)]
+    fn validate_schema<T>(item: &T) -> Result<(), jsonschema::error::ValidationErrorKind>
+    where
+        T: schemars::JsonSchema + serde::Serialize,
+    {
+        let schema = serde_json::to_value(schemars::schema_for!(T)).unwrap();
+        let json = serde_json::to_value(item).unwrap();
+
+        jsonschema::validate(&schema, &json).map_err(|e| e.kind)
     }
 }

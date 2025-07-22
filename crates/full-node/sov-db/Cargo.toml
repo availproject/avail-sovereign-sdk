@@ -1,7 +1,7 @@
 [package]
 name = "sov-db"
 description = "A high-level DB interface for the Sovereign SDK"
-license = "Apache-2.0"                                          # This license is inherited from Aptos 
+license = "Sovereign Labs Community Software License"
 edition = { workspace = true }
 authors = { workspace = true }
 homepage = { workspace = true }
@@ -18,6 +18,7 @@ jmt = { workspace = true }
 rockbound = { workspace = true }
 sov-rollup-interface = { workspace = true, features = ["native"] }
 nomt = { workspace = true }
+sov-metrics = { workspace = true, features = ["native"] }
 
 # External
 anyhow = { workspace = true, default-features = true }
@@ -36,6 +37,7 @@ tokio-stream = { workspace = true }
 hex = { workspace = true }
 tracing = { workspace = true }
 rand = { workspace = true, optional = true }
+schemars = { workspace = true }
 uuid = { workspace = true, features = ["std", "v7"] }
 
 [dev-dependencies]
@@ -78,5 +80,12 @@ required-features = ["test-utils"]
 [[bench]]
 name = "native_storage_manager"
 path = "benches/native_storage_manager.rs"
+harness = false
+required-features = ["test-utils"]
+
+
+[[bench]]
+name = "pruner"
+path = "benches/pruner_bench.rs"
 harness = false
 required-features = ["test-utils"]

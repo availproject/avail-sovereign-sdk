@@ -20,6 +20,7 @@ sov-paymaster = { workspace = true }
 sov-accounts = { workspace = true }
 sov-uniqueness = { workspace = true }
 sov-sequencer-registry = { workspace = true }
+sov-operator-incentives = { workspace = true }
 sov-prover-incentives = { workspace = true }
 sov-attester-incentives = { workspace = true }
 sov-state = { workspace = true }
@@ -39,5 +40,6 @@ native = [
 	"sov-attester-incentives/native",
 	"sov-sequencer-registry/native",
 	"sov-rollup-interface/native",
-	"sov-paymaster/native"
+	"sov-paymaster/native",
+	"sov-operator-incentives/native"
 ]

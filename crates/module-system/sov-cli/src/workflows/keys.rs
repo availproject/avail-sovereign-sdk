@@ -82,8 +82,7 @@ impl<S: sov_modules_api::Spec> KeyWorkflow<S> {
                 let private_key = load_key::<S>(&path)?;
                 let public_key = private_key.pub_key();
 
-                let credential_id: CredentialId =
-                    public_key.credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>();
+                let credential_id: CredentialId = public_key.credential_id();
                 let default_address: S::Address = credential_id.into();
 
                 let address = address_override.unwrap_or(default_address);
@@ -168,7 +167,7 @@ where
     let key_and_address = PrivateKeyAndAddress::<S>::from_key(keys);
     let public_key = key_and_address.private_key.pub_key();
     let address = key_and_address.address.clone();
-    let key_path = app_dir.as_ref().join(format!("{}.json", address));
+    let key_path = app_dir.as_ref().join(format!("{address}.json"));
     // First try to serialize, before making anything dirty
     let serialized_key = serde_json::to_string(&key_and_address)?;
     // Trying to add key state

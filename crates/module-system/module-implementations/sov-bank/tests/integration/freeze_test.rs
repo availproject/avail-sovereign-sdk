@@ -52,9 +52,9 @@ fn freeze_token_happy_path() {
                 let message_1 = chain.next().unwrap().to_string();
                 let message_2 = chain.next().unwrap().to_string();
                 assert!(chain.next().is_none());
-                assert_eq!(message_1, format!("Failed to mint token_id={}", token_id));
+                assert_eq!(message_1, format!("Failed to mint token_id={token_id}"));
                 assert_eq!(
-                    format!("Attempt to mint frozen token {}", token_name),
+                    format!("Attempt to mint frozen token {token_name}"),
                     message_2
                 );
             } else {
@@ -95,8 +95,8 @@ fn freeze_another_time_fails() {
                 let message_1 = chain.next().unwrap().to_string();
                 let message_2 = chain.next().unwrap().to_string();
                 assert!(chain.next().is_none());
-                assert_eq!(format!("Failed to freeze token_id={}", token_id), message_1);
-                assert_eq!(format!("Token {} is already frozen", token_name), message_2);
+                assert_eq!(format!("Failed to freeze token_id={token_id}"), message_1);
+                assert_eq!(format!("Token {token_name} is already frozen"), message_2);
             } else {
                 panic!("The transaction should have reverted");
             }
@@ -130,12 +130,9 @@ fn unauthorized_minter_cannot_freeze_token() {
                 let message_1 = chain.next().unwrap().to_string();
                 let message_2 = chain.next().unwrap().to_string();
                 assert!(chain.next().is_none());
-                assert_eq!(format!("Failed to freeze token_id={}", token_id), message_1);
+                assert_eq!(format!("Failed to freeze token_id={token_id}"), message_1);
                 assert_eq!(
-                    format!(
-                        "Sender {} is not an admin of token {}",
-                        unauthorized_address, token_name
-                    ),
+                    format!("Sender {unauthorized_address} is not an admin of token {token_name}"),
                     message_2
                 );
             } else {
@@ -159,7 +156,7 @@ fn test_freeze_fails_if_token_id_doesnt_exist() {
                 let Error::ModuleError(err) = contents.reason;
                 let mut chain = err.chain();
                 let message_1 = chain.next().unwrap().to_string();
-                assert_eq!(format!("Failed to get token_id={}", token_id), message_1);
+                assert_eq!(format!("Failed to get token_id={token_id}"), message_1);
             } else {
                 panic!("The transaction should have reverted");
             }

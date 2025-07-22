@@ -24,7 +24,7 @@ where
         D: serde::Deserializer<'a>,
     {
         let string = String::deserialize(deserializer).map_err(|e| {
-            serde::de::Error::custom(format!("failed to deserialize sorting string: {}", e))
+            serde::de::Error::custom(format!("failed to deserialize sorting string: {e}"))
         })?;
 
         let mut chars = string.chars();
@@ -33,8 +33,7 @@ where
             Some('+') => (SortingOrder::Ascending, chars.as_str()),
             Some(c) => {
                 return Err(serde::de::Error::custom(format!(
-                    "invalid sorting order character, must be either '+' or '-': {}",
-                    c
+                    "invalid sorting order character, must be either '+' or '-': {c}"
                 )));
             }
             None => {
@@ -56,7 +55,7 @@ where
         }
 
         let sort_by = T::from_str(sort_by_str).map_err(|e| {
-            serde::de::Error::custom(format!("failed to parse sorting string: {}", e))
+            serde::de::Error::custom(format!("failed to parse sorting string: {e}"))
         })?;
 
         Ok(Sorting { by: sort_by, order })

@@ -378,7 +378,7 @@ fn sub_namespace_inclusion_proofs(
         if !current_blob_proof.range_proofs.is_empty() {
             output.push(current_blob_proof);
         } else {
-            panic!("Empty proof for blob range: {:?}", blob_range);
+            panic!("Empty proof for blob range: {blob_range:?}");
         }
     }
     output

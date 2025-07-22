@@ -10,60 +10,43 @@ publish = false
 default-run = "main"
 
 [dependencies]
-tokio = { version = "1.42", default-features = false }
+tokio = { workspace = true, default-features = false }
 borsh = { workspace = true, features = ["derive"] }
 
-schemars = { version = "0.8.21", features = ["derive"] }
-serde = { version = "1.0.208", default-features = false, features = [
+schemars = { workspace = true, features = ["derive"] }
+serde = { workspace = true, default-features = false, features = [
     "alloc",
     "derive",
 ] }
 anyhow = { workspace = true }
 derivative = { version = "2.2", features = ["use_core"] }
-strum = { version = "0.26.3", features = ["derive"] }
-rand = "0.8"
+strum = { workspace = true, features = ["derive"] }
+rand = { workspace = true }
 clap = { version = "4", features = ["derive"] }
 reqwest = { workspace = true }
 
-sov-api-spec = { path = "../../../crates/full-node/sov-api-spec" }
-sov-metrics = { path = "../../../crates/full-node/sov-metrics" }
-sov-modules-rollup-blueprint = { path = "../../../crates/module-system/sov-modules-rollup-blueprint" }
-sov-transaction-generator = { path = "../../../crates/utils/transaction-generator" }
-sov-modules-api = { path = "../../../crates/module-system/sov-modules-api" }
-sov-test-utils = { path = "../../../crates/module-system/sov-test-utils", features = [
-    "arbitrary",
-] }
-sov-mock-da = { path = "../../../crates/adapters/mock-da", features = [
-    "arbitrary",
-    "native",
-] }
-sov-mock-zkvm = { path = "../../../crates/adapters/mock-zkvm", features = [
-    "native",
-] }
-sov-rollup-interface = { path = "../../../crates/rollup-interface", features = [
-    "arbitrary",
-] }
-sov-node-client = { path = "../../../crates/utils/sov-node-client" }
-sov-sequencer = { path = "../../../crates/full-node/sov-sequencer", default-features = false }
-sov-kernels = { path = "../../../crates/module-system/sov-kernels", features = [
-    "native",
-] }
-sov-state = { path = "../../../crates/module-system/sov-state", features = [
-    "arbitrary",
-] }
+sov-api-spec = { workspace = true }
+sov-metrics = { workspace = true }
+sov-modules-rollup-blueprint = { workspace = true }
+sov-transaction-generator = { workspace = true }
+sov-modules-api = { workspace = true }
+sov-test-utils = { workspace = true, features = ["arbitrary"] }
+sov-mock-da = { workspace = true, features = ["arbitrary", "native"] }
+sov-mock-zkvm = { workspace = true, features = ["native"] }
+sov-rollup-interface = { workspace = true, features = ["arbitrary"] }
+sov-node-client = { workspace = true }
+sov-sequencer = { workspace = true, default-features = false }
+sov-kernels = { workspace = true, features = ["native"] }
+sov-state = { workspace = true, features = ["arbitrary"] }
 # modules
-sov-value-setter = { path = "../../../crates/module-system/module-implementations/sov-value-setter" }
-sov-bank = { path = "../../../crates/module-system/module-implementations/sov-bank/", features = [
-    "native",
-    "arbitrary",
-] }
-sov-paymaster = { path = "../../../crates/module-system/module-implementations/sov-paymaster", features = [
-    "native",
-] }
+sov-value-setter = { workspace = true }
+sov-synthetic-load = { path = "../../../crates/module-system/module-implementations/sov-synthetic-load" }
+sov-bank = { workspace = true, features = ["native", "arbitrary"] }
+sov-paymaster = { workspace = true, features = ["native"] }
 sov-celestia-adapter = { workspace = true, features = ["native", "arbitrary"] }
 sov-avail-adapter = { workspace = true, features = ["native", "arbitrary"] }
 sov-address = { workspace = true }
-demo-stf = { path = "../stf", features = ["native"] }
+demo-stf = { workspace = true, features = ["native"] }
 
 [[bin]]
 name = "main"

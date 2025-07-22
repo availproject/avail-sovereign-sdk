@@ -1,9 +1,10 @@
 use std::num::NonZero;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use sov_db::config::RollupDbConfig;
 use sov_rollup_interface::node::da::DaService;
 use sov_sequencer::{SequencerConfig, SequencerKindConfig};
 
@@ -98,13 +99,6 @@ impl HttpServerConfig {
     }
 }
 
-/// Simple storage configuration
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
-pub struct StorageConfig {
-    /// Path that can be utilized by concrete implementation
-    pub path: PathBuf,
-}
-
 /// Prover service configuration.
 #[derive(Debug, Clone, Deserialize, Serialize, Copy, JsonSchema)]
 pub struct ProofManagerConfig<Address> {
@@ -125,7 +119,7 @@ pub struct ProofManagerConfig<Address> {
 #[schemars(bound = "Address: JsonSchema, Da: DaService", rename = "RollupConfig")]
 pub struct RollupConfig<Address, Da: DaService> {
     /// Currently rollup config runner only supports storage path parameter
-    pub storage: StorageConfig,
+    pub storage: RollupDbConfig,
     /// Runner own configuration.
     pub runner: RunnerConfig,
     /// Data Availability service configuration.

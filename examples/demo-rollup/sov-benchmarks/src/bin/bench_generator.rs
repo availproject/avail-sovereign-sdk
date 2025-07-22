@@ -38,8 +38,7 @@ async fn main() {
 
         std::fs::create_dir_all(&generation_base_path).unwrap_or_else(|_| {
             panic!(
-                "Impossible to create the generation base path {:?}, please ensure the path is valid",
-                generation_base_path
+                "Impossible to create the generation base path {generation_base_path:?}, please ensure the path is valid"
             )
         });
 
@@ -48,7 +47,7 @@ async fn main() {
             joinset.spawn(async move {
                 let mut bench_with_extension = benchmark.name.clone();
                 let bench_stamp = humantime::Timestamp::from(SystemTime::now());
-                bench_with_extension.push_str(&format!("_{}.bin", bench_stamp));
+                bench_with_extension.push_str(&format!("_{bench_stamp}.bin"));
 
                 info!(bench = benchmark.name, "Generating benchmark...");
 
@@ -60,8 +59,7 @@ async fn main() {
 
                 let file = File::create(path).unwrap_or_else(|_| {
                     panic!(
-                    "Impossible to generate a file at path {:?}, please ensure the path is valid",
-                    path_str,
+                    "Impossible to generate a file at path {path_str:?}, please ensure the path is valid",
                 )
                 });
 

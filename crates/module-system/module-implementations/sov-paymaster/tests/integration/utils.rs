@@ -151,9 +151,13 @@ pub fn setup(user_balance: Amount) -> Setup {
         .add_accounts_with_balance(2, user_balance);
 
     let sequencer = genesis_config.initial_sequencer.clone();
-    let payer = genesis_config.additional_accounts.first().unwrap().clone();
-    let user = genesis_config.additional_accounts.get(1).unwrap().clone();
-    let user_2 = genesis_config.additional_accounts.get(2).unwrap().clone();
+    let payer = genesis_config
+        .additional_accounts()
+        .first()
+        .unwrap()
+        .clone();
+    let user = genesis_config.additional_accounts().get(1).unwrap().clone();
+    let user_2 = genesis_config.additional_accounts().get(2).unwrap().clone();
 
     let genesis_config = GenesisConfig::from_minimal_config(
         genesis_config.into(),

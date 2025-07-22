@@ -188,8 +188,7 @@ impl<S: sov_modules_api::Spec> PrivateKeyAndAddress<S> {
     /// Returns boolean if the private key matches default address
     pub fn is_matching_to_default(&self) -> bool {
         let pub_key = &self.private_key.pub_key();
-        let credential_id: CredentialId =
-            pub_key.credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>();
+        let credential_id: CredentialId = pub_key.credential_id();
         let addr: S::Address = credential_id.into();
         addr == self.address
     }
@@ -197,9 +196,7 @@ impl<S: sov_modules_api::Spec> PrivateKeyAndAddress<S> {
     /// Randomly generates a new private key and address
     pub fn generate() -> Self {
         let private_key = <S::CryptoSpec as CryptoSpec>::PrivateKey::generate();
-        let credential_id: CredentialId = private_key
-            .pub_key()
-            .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>();
+        let credential_id: CredentialId = private_key.pub_key().credential_id();
         let address: S::Address = credential_id.into();
         Self {
             private_key,
@@ -209,9 +206,7 @@ impl<S: sov_modules_api::Spec> PrivateKeyAndAddress<S> {
 
     /// Generates a valid private key and address from a given private key
     pub fn from_key(private_key: <S::CryptoSpec as CryptoSpec>::PrivateKey) -> Self {
-        let credential_id: CredentialId = private_key
-            .pub_key()
-            .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>();
+        let credential_id: CredentialId = private_key.pub_key().credential_id();
         let address: S::Address = credential_id.into();
         Self {
             private_key,

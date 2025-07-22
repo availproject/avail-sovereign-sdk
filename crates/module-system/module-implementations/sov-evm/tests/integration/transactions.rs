@@ -63,8 +63,7 @@ fn test_executing_eth_transaction() {
             for receipt in receipts {
                 assert!(
                     receipt.receipt.success,
-                    "Eth tx didn't execute successfully, receipt: {:?}",
-                    receipt
+                    "Eth tx didn't execute successfully, receipt: {receipt:?}"
                 );
             }
             let storage_value = evm

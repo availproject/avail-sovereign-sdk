@@ -32,6 +32,7 @@ impl<S: Spec> BlobStorage<S> {
     ///
     /// The crucial check that must be correct is ensuring that the sequencer has enough balance to pay for the gas needed to run pre-execution checks *at the time the blob is selected* for execution.
     /// That check can be done with no guesswork.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn validate_blob(
         &mut self,
         idx: u32,

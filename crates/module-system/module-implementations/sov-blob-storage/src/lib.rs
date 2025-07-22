@@ -5,6 +5,7 @@ mod max_size_checker;
 mod validation;
 use std::collections::BTreeMap;
 use std::num::NonZero;
+use std::sync::Arc;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::de::DeserializeOwned;
@@ -293,7 +294,7 @@ pub struct PreferredBatchData {
     /// the rollup will defer processsing of the batch until the proof is received.
     pub sequence_number: u64,
     /// The actual data of the blob.
-    pub data: Vec<FullyBakedTx>,
+    pub data: Arc<Vec<FullyBakedTx>>,
     /// The number of visible slots to advance after processing the batch. Minimum 1.
     pub visible_slots_to_advance: NonZero<u8>,
 }

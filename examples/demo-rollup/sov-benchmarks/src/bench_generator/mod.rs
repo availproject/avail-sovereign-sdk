@@ -224,7 +224,6 @@ mod tests {
         HighLevelZkGenesisConfig, MinimalZkGenesisConfig,
     };
     use sov_test_utils::runtime::sov_bank::CallMessageDiscriminants as BankDiscriminants;
-    use sov_test_utils::runtime::ValueSetterConfig;
     use sov_test_utils::MockZkvm;
     use sov_transaction_generator::generators::bank::BankMessageGenerator;
     use sov_transaction_generator::generators::basic::BasicBankHarness;
@@ -263,9 +262,6 @@ mod tests {
                 MinimalZkGenesisConfig::from(HighLevelZkGenesisConfig::generate_with_additional_accounts_and_code_commitments(0, Default::default(), Default::default())),
                 EvmConfig::default(),
                 Default::default(),
-                ValueSetterConfig {
-                    admin: MultiAddress::Standard(Address::from_const_slice([0; 28])),
-                },
                 AccessPatternGenesisConfig {
                     admin: MultiAddress::Standard(Address::from_const_slice([0; 28])),
                 }

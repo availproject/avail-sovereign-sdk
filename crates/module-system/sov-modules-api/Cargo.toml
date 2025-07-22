@@ -64,7 +64,6 @@ nearly-linear = { workspace = true }
 [dev-dependencies]
 sov-state = { workspace = true, features = ["native", "test-utils"] }
 bincode = { workspace = true }
-tempfile = { workspace = true }
 sov-mock-da = { workspace = true, features = ["native"] }
 sov-mock-zkvm = { workspace = true, features = ["native"] }
 sov-bank = { workspace = true, features = ["native"] }
@@ -76,25 +75,25 @@ reqwest = { workspace = true }
 utoipa = { workspace = true, features = ["debug"] }
 openapiv3 = "2.0.0"
 trybuild = "1.0"
-nomt = { workspace = true }
 tokio = { workspace = true }
 
 [features]
 arbitrary = [
-    "dep:arbitrary",
-    "dep:proptest",
-    "dep:proptest-derive",
-    "proptest/default",
-    "sov-db?/arbitrary",
-    "sov-mock-zkvm/arbitrary",
-    "sov-modules-api/arbitrary",
-    "sov-rest-utils/arbitrary",
-    "sov-rollup-interface/arbitrary",
-    "sov-state/arbitrary",
-    "sov-sequencer-registry/arbitrary",
-    "sov-test-utils/arbitrary",
-    "sov-mock-da/arbitrary",
-    "sov-bank/arbitrary",
+	"dep:arbitrary",
+	"dep:proptest",
+	"dep:proptest-derive",
+	"proptest/default",
+	"sov-db?/arbitrary",
+	"sov-mock-zkvm/arbitrary",
+	"sov-modules-api/arbitrary",
+	"sov-rest-utils/arbitrary",
+	"sov-rollup-interface/arbitrary",
+	"sov-state/arbitrary",
+	"sov-sequencer-registry/arbitrary",
+	"sov-test-utils/arbitrary",
+	"sov-mock-da/arbitrary",
+	"sov-bank/arbitrary",
+	"sov-modules-macros/arbitrary"
 ]
 bench = [
     "sov-metrics",

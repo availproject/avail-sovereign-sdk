@@ -25,7 +25,11 @@ fn setup() -> (TestUser<S>, TestRunner<RT>) {
     let genesis_config =
         HighLevelOptimisticGenesisConfig::generate().add_accounts_with_default_balance(1);
 
-    let user = genesis_config.additional_accounts.first().unwrap().clone();
+    let user = genesis_config
+        .additional_accounts()
+        .first()
+        .unwrap()
+        .clone();
 
     let genesis = GenesisConfig::from_minimal_config(genesis_config.into(), ());
 

@@ -16,14 +16,13 @@ workspace = true
 
 [dependencies]
 borsh = { workspace = true, features = ["derive", "bytes"] }
-bech32 = { version = "0.11" }
+bech32 = { workspace = true }
 prost = "0.13"
 
-celestia-proto = { version = "0.7.0" }
-celestia-rpc = { version = "0.10.0", default-features = false, optional = true }
-celestia-types = { version = "0.11.0", default-features = false }
-tendermint = { version = "0.40.1", default-features = false }
-tendermint-proto = { version = "0.40.1" }
+celestia-rpc = { version = "0.11.2", default-features = false, optional = true }
+celestia-types = { version = "0.12.0", default-features = false }
+tendermint = { version = "0.40.4", default-features = false }
+tendermint-proto = { version = "0.40.4" }
 nmt-rs = { workspace = true, features = ["serde", "borsh"] }
 
 # Convenience
@@ -42,7 +41,6 @@ serde = { workspace = true, default-features = false, features = [
     "derive",
 ] }
 serde_json = { workspace = true, features = ["alloc"] }
-sha2 = { workspace = true }
 
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true, features = ["sync"] }
@@ -99,5 +97,6 @@ arbitrary = [
     "dep:proptest",
     "sov-celestia-adapter/arbitrary",
     "sov-rollup-interface/arbitrary",
-    "sov-test-utils/arbitrary"
+    "sov-test-utils/arbitrary",
+    "sov-modules-macros?/arbitrary"
 ]

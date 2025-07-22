@@ -189,13 +189,13 @@ fn event_key<T: Debug>(module_prefix: &str, event: &T) -> String {
         .next()
         .unwrap_or_default();
 
-    format!("{}/{}", module_prefix, event_identifier)
+    format!("{module_prefix}/{event_identifier}")
 }
 
 /// A helper function to make string representation of the inner call message from the runtime's `Decodable` representation.
 pub fn call_message_repr<D: DispatchCall>(decodable: &D::Decodable) -> String {
     // Extract the variant name from the part right after the first parenthesis
-    let dbg = format!("{:?}", decodable);
+    let dbg = format!("{decodable:?}");
     let variant_part = dbg
         .split_once('(')
         .map(|(_idx, after_parent)| {

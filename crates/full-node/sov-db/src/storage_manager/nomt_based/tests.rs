@@ -7,6 +7,7 @@ use sov_rollup_interface::common::SlotNumber;
 
 use super::{NomtChangeSet, NomtStorageManager, StateFinishedSession};
 use crate::accessory_db::AccessoryDb;
+use crate::config::RollupDbConfig;
 use crate::historical_state::HistoricalStateReader;
 use crate::namespaces::{KernelNamespace, UserNamespace};
 use crate::storage_manager::tests::arbitrary::ForkDescription;
@@ -120,7 +121,8 @@ type Sm = NomtStorageManager<MockDaSpec, H, TestNomtStorage>;
 
 impl TestableStorageManager for Sm {
     fn new(path: impl AsRef<Path>) -> Self {
-        Sm::new(path).unwrap()
+        let config = RollupDbConfig::default_in_path(path.as_ref().to_path_buf());
+        Sm::new(config).unwrap()
     }
 
     fn verify_stf_storage(stf_storage: &Self::StfState, expected_values: &[(u64, MockHash)]) {

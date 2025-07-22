@@ -3,6 +3,7 @@
 use std::fmt::Display;
 
 use sha2::Digest;
+use sov_rollup_interface::common::RollupHeight;
 use sov_rollup_interface::da::{BlobReaderTrait, DaSpec, RelevantBlobIters};
 use sov_rollup_interface::stf::{ApplySlotOutput, BatchReceipt, StateTransitionFunction};
 use sov_rollup_interface::zk::Zkvm;
@@ -117,6 +118,7 @@ impl<InnerVm: Zkvm, OuterVm: Zkvm, Da: DaSpec> StateTransitionFunction<InnerVm, 
             proof_receipts: vec![],
             batch_receipts: receipts,
             witness: (),
+            rollup_height: RollupHeight::new(0),
         }
     }
 }

@@ -1,9 +1,8 @@
 use sov_modules_api::macros::config_value;
-use sov_modules_api::{BatchWithId, Spec};
+use sov_modules_api::{BatchWithId, DaSpec, Spec};
 use tracing::{error, warn};
 
-use crate::capabilities::BlobDiscardReason;
-use crate::{BlobStorage, SequencerType, ValidatedBlob};
+use crate::{SequencerType, ValidatedBlob};
 
 /// We put a cap on how much space preferred blobs can use, but we allow
 /// non-preferred blobs to use any and all space if needed.
@@ -81,6 +80,12 @@ pub(crate) struct BlobsAccumulatorWithSizeLimit<S: Spec> {
     blob_size_checker: BlobSizeChecker,
 }
 
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub(crate) enum PushOrIgnore<S: Spec> {
+    Accepted,
+    IgnoredBlob([u8; 32], <<S as Spec>::Da as DaSpec>::Address),
+}
+
 impl<S: Spec> BlobsAccumulatorWithSizeLimit<S> {
     pub fn new() -> Self {
         Self::new_with_size(config_value!(
@@ -114,7 +119,7 @@ impl<S: Spec> BlobsAccumulatorWithSizeLimit<S> {
         &mut self,
         sequencer_type: SequencerType,
         elem: ValidatedBlob<S, BatchWithId<S>>,
-    ) -> bool {
+    ) -> PushOrIgnore<S> {
         let can_process_blob = self
             .blob_size_checker
             .can_process_blob(sequencer_type, elem.blob.blob_size());
@@ -123,15 +128,10 @@ impl<S: Spec> BlobsAccumulatorWithSizeLimit<S> {
             self.blob_size_checker
                 .process_blob(sequencer_type, elem.blob.blob_size());
             self.blobs_with_address.push(elem);
+            PushOrIgnore::Accepted
         } else {
-            BlobStorage::<S>::log_discarded_item(
-                &elem.sender,
-                elem.blob.id(),
-                &BlobDiscardReason::OutOfCapacity,
-            );
+            PushOrIgnore::IgnoredBlob(elem.blob.id(), elem.sender)
         }
-
-        can_process_blob
     }
 
     /// Returns true if the blob can be accepted.
@@ -148,6 +148,7 @@ impl<S: Spec> BlobsAccumulatorWithSizeLimit<S> {
 #[cfg(test)]
 mod tests {
     use sov_modules_api::{BatchWithId, BlobDataWithId, FullyBakedTx};
+    use sov_test_utils::assert_matches;
 
     use super::*;
     use crate::{Escrow, SequencerType};
@@ -168,7 +169,7 @@ mod tests {
     fn create_blob(size: usize) -> ValidatedBlob<S, BatchWithId<S>> {
         ValidatedBlob::new(
             BlobDataWithId::Batch(BatchWithId::new(
-                vec![FullyBakedTx::new(vec![0; size])],
+                vec![FullyBakedTx::new(vec![0; size])].into(),
                 [0; 32],
                 [0; 28].into(),
             )),
@@ -192,7 +193,11 @@ mod tests {
             for (i, b) in txs.into_iter().enumerate() {
                 let addr = [i as u8; 32].into();
                 let b = ValidatedBlob::new(
-                    BlobDataWithId::Batch(BatchWithId::new(b, [0; 32], [i as u8; 28].into())),
+                    BlobDataWithId::Batch(BatchWithId::new(
+                        b.into(),
+                        [0; 32],
+                        [i as u8; 28].into(),
+                    )),
                     addr,
                     Escrow::None,
                 );
@@ -234,7 +239,7 @@ mod tests {
             let blob = create_blob(blob_size);
             let can_process_blob = blobs_with_total_size_limit
                 .push_or_ignore(SequencerType::NonPreferred, blob.clone());
-            assert!(!can_process_blob);
+            assert_matches!(can_process_blob, PushOrIgnore::IgnoredBlob(_, _));
         }
 
         // The blob can be processed as a preferred blob.
@@ -242,7 +247,7 @@ mod tests {
             let blob = create_blob(blob_size);
             let can_process_blob =
                 blobs_with_total_size_limit.push_or_ignore(SequencerType::Preferred, blob);
-            assert!(can_process_blob);
+            assert_eq!(can_process_blob, PushOrIgnore::Accepted);
         }
     }
 
@@ -259,7 +264,7 @@ mod tests {
         {
             let can_process_blob =
                 blobs_with_total_size_limit.push_or_ignore(SequencerType::Preferred, blob);
-            assert!(can_process_blob);
+            assert_eq!(can_process_blob, PushOrIgnore::Accepted);
         }
 
         let blob_size = 10;
@@ -268,7 +273,7 @@ mod tests {
         {
             let can_process_blob =
                 blobs_with_total_size_limit.push_or_ignore(SequencerType::NonPreferred, blob);
-            assert!(can_process_blob);
+            assert_eq!(can_process_blob, PushOrIgnore::Accepted);
         }
     }
 }

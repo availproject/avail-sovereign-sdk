@@ -17,7 +17,11 @@ fn test_example_module() {
     let genesis_config =
         HighLevelOptimisticGenesisConfig::generate().add_accounts_with_default_balance(1);
 
-    let user = genesis_config.additional_accounts.first().unwrap().clone();
+    let user = genesis_config
+        .additional_accounts()
+        .first()
+        .unwrap()
+        .clone();
 
     // Run genesis registering the attester and sequencer we've generated.
     let genesis = GenesisConfig::from_minimal_config(genesis_config.into(), ExampleModuleConfig {});

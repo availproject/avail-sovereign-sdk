@@ -44,7 +44,7 @@ fn test_response_deserialization_on_wrong_hrp() {
     let response: Result<Response<<S as Spec>::Address>, serde_json::Error> =
         serde_json::from_str(json);
     match response {
-        Ok(response) => panic!("Expected error, got {:?}", response),
+        Ok(response) => panic!("Expected error, got {response:?}"),
         Err(err) => {
             assert_eq!(err.to_string(), "Wrong HRP: hax at line 1 column 44");
         }

@@ -156,7 +156,7 @@ pub async fn assert_logs_against_state<Log: ChangelogEntry>(
 
         let config_clone = config.clone();
 
-        if joinset.len() >= num_threads.into() {
+        if joinset.len() >= num_threads as usize {
             joinset.join_next().await.unwrap()??;
         }
 

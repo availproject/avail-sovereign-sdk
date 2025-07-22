@@ -240,41 +240,35 @@ where
         Ok(auth_output) => auth_output,
         // Note that on failure no one pays for the gas used.
         // However, we still meter it so that it counts against the slot gas limit.
-        Err(UnregisteredAuthenticationError::FatalError(err, tx_hash)) => {
+        Err(e) => {
             let (scratchpad, gas_meter) = pre_exec_working_set.to_scratchpad_and_gas_meter();
             let gas_info = gas_meter.gas_info();
-
-            let err_str = format!("Unregistered sequencer authentication failed: {}", err);
-            warn!(error = ?err_str);
-
             let gas_used = gas_info.gas_used;
+            match e {
+                UnregisteredAuthenticationError::FatalError(err, tx_hash) => {
+                    let err_str = format!("Unregistered sequencer authentication failed: {err}");
+                    warn!(error = ?err_str);
+                    let skipped = SkippedTxContents {
+                        error: TxProcessingError::AuthenticationFailed(err_str),
+                        gas_used: gas_used.clone(),
+                    };
 
-            let skipped = SkippedTxContents {
-                error: TxProcessingError::AuthenticationFailed(err_str),
-                gas_used: gas_used.clone(),
-            };
-
-            return (
-                early_return_batch_receipt(
-                    vec![create_tx_receipt(skipped, tx_hash)],
-                    Vec::new(),
-                    gas_used,
-                ),
-                scratchpad.commit(),
-            );
-        }
-
-        Err(UnregisteredAuthenticationError::OutOfGas(reason)) => {
-            let (scratchpad, gas_meter) = pre_exec_working_set.to_scratchpad_and_gas_meter();
-            let gas_info = gas_meter.gas_info();
-
-            warn!(
-                error = %reason,
-                "Not enough gas to authenticate the batch",
-            );
-
-            let gas_used = gas_info.gas_used;
-
+                    return (
+                        early_return_batch_receipt(
+                            vec![create_tx_receipt(skipped, tx_hash)],
+                            Vec::new(),
+                            gas_used,
+                        ),
+                        scratchpad.commit(),
+                    );
+                }
+                UnregisteredAuthenticationError::OutOfGas(reason) => {
+                    warn!(error = %reason, "Not enough gas to authenticate the batch");
+                }
+                UnregisteredAuthenticationError::InvalidAuthenticationDiscriminant => {
+                    warn!("Invalid authentication discriminant");
+                }
+            }
             let ignored = IgnoredTransactionReceipt::<TxReceiptContents<S>> {
                 ignored: IgnoredTxContents {
                     gas_used: gas_used.clone(),

@@ -9,8 +9,8 @@ This code has not been audited, and may contain critical vulnerabilities. Do not
 
 ## Celestia Integration
 
-The current version of `sov-celestia-adapter` runs against celestia-node version `v0.21.7`.
-This is the version used on the `mocha` testnet as of Apr 8th, 2025.
+The current version of `sov-celestia-adapter` runs against celestia-node version `v0.23.1`.
+This is the version used on the `mocha` testnet as of Jul 3rd, 2025.
 
 To set up Celestia nodes, please refer to the official documentation provided by Celestia, for example: 
 [how to run a light node](https://docs.celestia.org/how-to-guides/light-node)

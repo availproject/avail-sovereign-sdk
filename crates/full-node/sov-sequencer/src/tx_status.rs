@@ -47,7 +47,7 @@ impl<B> TxStatus<B> {
     /// After a terminal status is reached, the WebSocket connection will be
     /// closed becaus no more events will be sent.
     pub fn is_terminal(&self) -> bool {
-        matches!(self, TxStatus::Processed { .. } | TxStatus::Dropped { .. })
+        matches!(self, TxStatus::Processed | TxStatus::Dropped { .. })
     }
 }
 
@@ -322,7 +322,7 @@ mod tests {
             assert_eq!(txsm.get_cached(&TxHash::new([2; 32])), None);
 
             // Before cleanup, the senders should still be present.
-            assert!(txsm.senders.read().unwrap().len() > 0);
+            assert!(!txsm.senders.read().unwrap().is_empty());
         }
 
         wait().await;

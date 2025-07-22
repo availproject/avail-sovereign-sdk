@@ -49,6 +49,7 @@ fn bad_path_error(key: &str) -> Response {
 }
 
 /// Finds a specific path component in a [`PathMap`] of type [`NumberOrHash`].
+#[allow(clippy::result_large_err)]
 fn get_path_item(path_map: &PathMap, key: &str) -> Result<NumberOrHash, Response> {
     if let Some(value) = path_map.get(key) {
         Ok(*value)
@@ -59,6 +60,7 @@ fn get_path_item(path_map: &PathMap, key: &str) -> Result<NumberOrHash, Response
 
 /// Finds a specific path component in a [`PathMap`] of type [`u64`]. Used for
 /// parsing offsets.
+#[allow(clippy::result_large_err)]
 fn get_path_number(path_map: &PathMap, key: &str) -> Result<u64, Response> {
     if let Some(value) = path_map.get(key).and_then(|value| value.as_u64()) {
         Ok(value)

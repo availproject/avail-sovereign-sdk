@@ -27,6 +27,7 @@ sov-state = { workspace = true, features = ["native"] }
 anyhow = { workspace = true }
 strum = { workspace = true }
 sov-modules-api = { workspace = true }
+sov-rollup-interface = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
@@ -36,8 +37,9 @@ sov-state = { workspace = true }
 [features]
 default = []
 native = [
-	"sov-modules-api/native",
-	"sov-value-setter/native",
-	"sov-state/native",
-	"sov-address/native"
+    "sov-modules-api/native",
+    "sov-rollup-interface/native",
+    "sov-value-setter/native",
+    "sov-state/native",
+    "sov-address/native"
 ]

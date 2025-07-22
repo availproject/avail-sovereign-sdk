@@ -10,8 +10,7 @@ use celestia_types::nmt::Namespace;
 use celestia_types::state::Address;
 use futures::stream::BoxStream;
 use futures::StreamExt;
-use jsonrpsee::http_client::transport::HttpBackend;
-use jsonrpsee::http_client::{HeaderMap, HttpClient};
+use jsonrpsee::http_client::{HeaderMap, HttpClient, HttpClientBuilder};
 use sov_rollup_interface::common::HexHash;
 use sov_rollup_interface::da::{DaProof, DaSpec, RelevantBlobs, RelevantProofs};
 use sov_rollup_interface::node::da::{
@@ -19,11 +18,9 @@ use sov_rollup_interface::node::da::{
 };
 use tokio::sync::{oneshot, Mutex};
 use tokio::time::Instant;
-use tower::ServiceBuilder;
 use tracing::{debug, info, instrument, trace};
 
 pub use crate::config::CelestiaConfig;
-use crate::middleware::{TimingLayer, TimingMiddleware};
 use crate::types::{
     BlobWithSender, FilteredCelestiaBlock, NamespaceBoundaryProof, NamespaceRelevantData, TmHash,
     APP_VERSION,
@@ -35,7 +32,7 @@ use crate::CelestiaHeader;
 
 type BoxError = anyhow::Error;
 
-type TimedHttpClient = HttpClient<TimingMiddleware<HttpBackend>>;
+type TimedHttpClient = HttpClient;
 
 #[derive(Debug, Clone)]
 pub struct CelestiaService {
@@ -57,11 +54,8 @@ impl CelestiaService {
         rollup_proof_namespace: Namespace,
         signer_address: CelestiaAddress,
         safe_lead_time: Duration,
+        backoff_policy: ExponentialBuilder,
     ) -> Self {
-        // NOTE: Current exponential backoff policy defaults:
-        // jitter: false, factor: 2, min_delay: 1s, max_delay: 60s, max_times: 3,
-        let backoff_policy = ExponentialBuilder::default();
-
         Self {
             submit_client: Arc::new(Mutex::new(client.clone())),
             read_client: Arc::new(client),
@@ -89,13 +83,13 @@ impl CelestiaService {
             APP_VERSION,
         )
         .expect("Bug in CelestiaAdapter");
-        info!(
-            commitment = hex::encode(blob.commitment.hash()),
+        let blob_hash = HexHash::new(*blob.commitment.hash());
+        debug!(
+            commitment = %blob_hash,
             bytes,
             data_bytes = blob.data.len(),
             "Submitting a blob"
         );
-        let blob_hash = HexHash::new(*blob.commitment.hash());
 
         let tx_config = celestia_rpc::TxConfig::default();
 
@@ -112,10 +106,12 @@ impl CelestiaService {
         );
 
         info!(
-            height = tx_response.height,
+            da_height = tx_response.height,
             tx_hash = %tx_hash,
             code = %tx_response.code,
             blob_hash = %blob_hash,
+            gas_used = %tx_response.gas_used,
+            bytes,
             "Blob has been submitted to Celestia"
         );
 
@@ -137,30 +133,38 @@ impl CelestiaService {
                     .unwrap(),
             );
 
-            jsonrpsee::http_client::HttpClientBuilder::default()
+            HttpClientBuilder::default()
                 .set_headers(headers)
                 .max_response_size(config.max_celestia_response_body_size.get())
                 .max_request_size(config.max_celestia_response_body_size.get())
                 .request_timeout(Duration::from_secs(
                     config.celestia_rpc_timeout_seconds.get(),
                 ))
-                .set_http_middleware(ServiceBuilder::new().layer(TimingLayer))
                 .build(&config.celestia_rpc_address)
         }
         .expect("Client initialization is valid");
 
-        let fetched_address = client
-            .state_account_address()
-            .await
-            .expect("Failed to query state.AccountAddress to retrieve signer address");
+        let backoff_policy = config.get_backoff_policy();
+        let fetched_address = run_maybe_retryable_async_fn_with_retries(
+            &backoff_policy,
+            || async {
+                client
+                    .state_account_address()
+                    .await
+                    .map_err(into_transient_with_context)
+            },
+            "state_account_address",
+        )
+        .await
+        .expect("Failed to query state.AccountAddress to retrieve signer address");
 
         let fetched_signer = match fetched_address {
             Address::AccAddress(acc) => CelestiaAddress(acc),
             Address::ValAddress(addr) => {
-                panic!("Need account address, got validator: {}", addr);
+                panic!("Need account address, got validator: {addr}");
             }
             Address::ConsAddress(addr) => {
-                panic!("Need account address, got consensus node: {}", addr);
+                panic!("Need account address, got consensus node: {addr}");
             }
         };
         debug!(address = %fetched_signer, "Fetched signer.");
@@ -168,8 +172,7 @@ impl CelestiaService {
         if let Some(config_signer_address) = config.signer_address {
             if config_signer_address != fetched_signer {
                 panic!(
-                    "Signer address in in config {} does not match signer address fetched from node {}",
-                    config_signer_address, fetched_signer
+                    "Signer address in in config {config_signer_address} does not match signer address fetched from node {fetched_signer}"
                 );
             }
         }
@@ -180,6 +183,7 @@ impl CelestiaService {
             chain_params.rollup_proof_namespace,
             fetched_signer,
             Duration::from_millis(config.safe_lead_time_ms),
+            backoff_policy,
         )
     }
 }
@@ -308,7 +312,6 @@ impl CelestiaService {
 fn into_transient_with_context(
     error: jsonrpsee::core::ClientError,
 ) -> MaybeRetryable<anyhow::Error> {
-    tracing::info!("ORIGINAL ERROR: {}", error);
     let error = anyhow::anyhow!("Celestia RPC node returned an error: {:?}", error);
     MaybeRetryable::Transient(error)
 }
@@ -558,14 +561,9 @@ mod tests {
         let timeout_sec = timeout_sec
             .map(|t| NonZero::new(t).unwrap())
             .unwrap_or_else(default_request_timeout_seconds);
-        let config = CelestiaConfig {
-            celestia_rpc_auth_token: "RPC_TOKEN".to_string(),
-            celestia_rpc_address: mock_server.uri(),
-            max_celestia_response_body_size: NonZero::new(120_000).unwrap(),
-            celestia_rpc_timeout_seconds: timeout_sec,
-            safe_lead_time_ms: 0,
-            signer_address: Some(address),
-        };
+        let mut config = CelestiaConfig::dev_config(&mock_server.uri());
+        config.signer_address = Some(address);
+        config.celestia_rpc_timeout_seconds = timeout_sec;
 
         let da_service = CelestiaService::new(config.clone(), params).await;
 
@@ -628,7 +626,7 @@ mod tests {
         let response = da_service.send_transaction(&blob).await.await??;
         assert_eq!(
             response.da_transaction_id.to_string(),
-            format!("0x{}", expected_tx_hash)
+            format!("0x{expected_tx_hash}")
         );
         Ok(())
     }
@@ -749,8 +747,7 @@ mod tests {
 
         assert!(
             error.contains("RequestTimeout"),
-            "Error: {} does not contain 'Request timeout'",
-            error
+            "Error: {error} does not contain 'Request timeout'"
         );
         Ok(())
     }
@@ -906,8 +903,7 @@ mod tests {
             .unwrap_err();
         assert!(
             error.to_string().contains(expected_err_pattern),
-            "Actual error: {}",
-            error
+            "Actual error: {error}"
         );
         Ok(())
     }
@@ -938,8 +934,7 @@ mod tests {
             error
                 .to_string()
                 .contains("IncompleteNamespace(ProofError(Invalid(WrongAmountOfLeavesProvided)))"),
-            "Actual error: {}",
-            error
+            "Actual error: {error}"
         );
     }
 
@@ -967,8 +962,7 @@ mod tests {
             error
                 .to_string()
                 .contains("InvalidRowProof(ProofError(Missing))"),
-            "Actual error: {}",
-            error
+            "Actual error: {error}"
         );
     }
 
@@ -1025,8 +1019,7 @@ mod tests {
 
         assert!(
             error.to_string().contains("WrongStartShareIndex"),
-            "Actual error: {}",
-            error
+            "Actual error: {error}"
         );
     }
 
@@ -1054,8 +1047,7 @@ mod tests {
             error
                 .to_string()
                 .contains("InvalidRowProof(ProofError(Invalid(InvalidRoot)))"),
-            "Actual error: {}",
-            error
+            "Actual error: {error}"
         );
     }
 
@@ -1097,7 +1089,8 @@ mod tests {
                         "gas_used": 69085,
                         "timestamp": "",
                         "events": [],
-                })})
+                })
+            })
             .up_to_n_times(1)
             .mount(&mock_server)
             .await;
@@ -1187,7 +1180,7 @@ mod tests {
             let path = make_test_path(data_path);
             update_block_data(&path, &client, &signer, with_prev_header)
                 .await
-                .with_context(|| format!("In path {}", data_path))?;
+                .with_context(|| format!("In path {data_path}"))?;
         }
 
         Ok(())

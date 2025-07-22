@@ -322,7 +322,7 @@ fn build_preferred_empty_blob(
 ) -> MockBlob {
     let batch_data = sov_blob_storage::PreferredBatchData {
         sequence_number,
-        data: Vec::new(),
+        data: vec![].into(),
         visible_slots_to_advance: NonZero::new(slots_to_advance).unwrap(),
     };
 

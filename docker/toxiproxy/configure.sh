@@ -1,15 +1,15 @@
 #!/bin/sh
-echo "Configuring toxiproxy for sequencer-0:\n"
-#TOXIPROXY_HOST="localhost"
-TOXIPROXY_HOST="toxiproxy"
+set -e
 
-curl -s -XPOST -d '{"name" : "sequencer-0", "listen" : "0.0.0.0:26659", "upstream" : "sequencer-0:26658"}' http://$TOXIPROXY_HOST:8474/proxies
-#curl -s -XPOST -d '{"type": "latency", "toxicity": 0.95, "attributes": {"latency" : 4000, }}' http://$TOXIPROXY_HOST:8474/proxies/sequencer-0/toxics
-curl -s -XPOST -d '{"type": "timeout", "toxicity": 0.8, "attributes": {"timeout": 30000}}' http://$TOXIPROXY_HOST:8474/proxies/sequencer-0/toxics
+# This script just enables proxies, but does not install any toxics
 
-# Other options to consider
-# latency
-# slow_close
-# reset_peer
+echo "Configuring toxiproxy on standard mode for sequencer-0:\n"
+TOXIPROXY_HOST="${TOXIPROXY_HOST:-toxiproxy}"
+
+echo "Creating proxy..."
+curl -v --fail -H "Content-Type: application/json" -d '{"name" : "sequencer-0", "listen" : "0.0.0.0:26659", "upstream" : "sequencer-0:26658"}' http://$TOXIPROXY_HOST:8474/proxies
+
+echo "\n\n===== Final Configuration ====="
+curl -s http://$TOXIPROXY_HOST:8474/proxies/sequencer-0
 
 echo "\n\n=====\nConfiguration is completed!"

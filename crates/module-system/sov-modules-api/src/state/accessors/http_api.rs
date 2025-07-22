@@ -484,17 +484,17 @@ impl<S: Spec + 'static> ApiStateAccessor<S> {
             StateToAccess::TrueSlotNumber(slot_number, None) => {
                 kernel
                 .true_slot_number_to_rollup_height(slot_number, &mut state)
-                .unwrap_or_else(|| panic!("Visible slot number not available for slot_number {}, but that slot exists in storage. This is a bug. Please report it.", slot_number))
+                .unwrap_or_else(|| panic!("Visible slot number not available for slot_number {slot_number}, but that slot exists in storage. This is a bug. Please report it."))
             }
         };
         // Use the slot number to find the visible slot number.
         let Some(visible_slot_number) = kernel.visible_slot_number_at(true_slot_number, &mut state)
         else {
-            panic!("Visible slot number not available at slot number {}, but that height exist in storage. This is a bug. Please report it.", true_slot_number);
+            panic!("Visible slot number not available at slot number {true_slot_number}, but that height exist in storage. This is a bug. Please report it.");
         };
         // Use the rollup height to find the base fee per gas.
         let Some(base_fee_per_gas) = kernel.base_fee_per_gas_at(rollup_height, &mut state) else {
-            panic!("Base fee per gas not available at height {}, but that height exist in storage. This is a bug. Please report it.", rollup_height);
+            panic!("Base fee per gas not available at height {rollup_height}, but that height exist in storage. This is a bug. Please report it.");
         };
         state.visible_slot_number = Some(visible_slot_number);
         state.safe_true_slot_number_to_use = Some(true_slot_number);
@@ -541,7 +541,7 @@ impl<S: Spec> VersionReader for ApiStateAccessor<S> {
             StateToAccess::RollupHeight(rollup_height) => rollup_height,
             StateToAccess::TrueSlotNumber(_slot_number, Some(rollup_height)) => rollup_height,
             StateToAccess::TrueSlotNumber(slot_number, None) => {
-                panic!("Rollup height not cached for slot number {}, but that slot exists in storage. This is a bug in ApiStateAccessor initialization. Please report it.", slot_number);
+                panic!("Rollup height not cached for slot number {slot_number}, but that slot exists in storage. This is a bug in ApiStateAccessor initialization. Please report it.");
             }
         }
     }

@@ -2,7 +2,7 @@ use std::convert::Infallible;
 
 #[cfg(feature = "native")]
 use sov_attester_incentives::BondingProofServiceImpl;
-use sov_bank::utils::TokenHolderRef;
+use sov_bank::utils::TokenHolder;
 use sov_bank::{config_gas_token_id, Coins, IntoPayable, Payable};
 #[cfg(feature = "native")]
 use sov_modules_api::capabilities::HasKernel;
@@ -32,6 +32,7 @@ pub struct StandardProvenRollupCapabilities<'a, S: Spec, GasPayer = ()> {
     pub sequencer_registry: &'a mut SequencerRegistry<S>,
     pub accounts: &'a mut sov_accounts::Accounts<S>,
     pub uniqueness: &'a mut sov_uniqueness::Uniqueness<S>,
+    pub operator_incentives: &'a mut sov_operator_incentives::OperatorIncentives<S>,
     pub prover_incentives: &'a mut sov_prover_incentives::ProverIncentives<S>,
     pub attester_incentives: &'a mut sov_attester_incentives::AttesterIncentives<S>,
 }
@@ -40,15 +41,18 @@ impl<'a, S: Spec, T> StandardProvenRollupCapabilities<'a, S, T> {
     fn get_prover_token_holder(
         &'a self,
         oprating_mode: OperatingMode,
-        _state: &mut impl InfallibleStateAccessor,
-    ) -> TokenHolderRef<'a, S> {
-        let rewarded_module = match oprating_mode {
-            OperatingMode::Zk => self.prover_incentives.id().to_payable(),
-            OperatingMode::Optimistic => self.attester_incentives.id().to_payable(),
-            OperatingMode::Operator => todo!("Operator mode not implemented yet"),
+        state: &mut impl InfallibleStateAccessor,
+    ) -> TokenHolder<S> {
+        let rewarded_token_holder = match oprating_mode {
+            OperatingMode::Zk => self.prover_incentives.id().to_payable().into(),
+            OperatingMode::Optimistic => self.attester_incentives.id().to_payable().into(),
+            OperatingMode::Operator => {
+                let addr = self.operator_incentives.reward_address(state);
+                TokenHolder::User(addr)
+            }
         };
 
-        rewarded_module
+        rewarded_token_holder
     }
 }
 
@@ -62,7 +66,7 @@ trait HasGasPayer<S: Spec> {
     ) -> anyhow::Result<()>;
 }
 
-impl<'a, S: Spec> HasGasPayer<S> for StandardProvenRollupCapabilities<'a, S> {
+impl<S: Spec> HasGasPayer<S> for StandardProvenRollupCapabilities<'_, S> {
     /// Reserves enough gas for the transaction to be processed, if possible.
     fn try_reserve_gas_from_payer(
         &mut self,
@@ -101,7 +105,7 @@ fn gas_coins(amount: Amount) -> Coins {
     }
 }
 
-impl<'a, S: Spec, T> GasEnforcer<S> for StandardProvenRollupCapabilities<'a, S, T>
+impl<S: Spec, T> GasEnforcer<S> for StandardProvenRollupCapabilities<'_, S, T>
 where
     Self: HasGasPayer<S>,
 {
@@ -114,7 +118,6 @@ where
         state: &mut impl StateAccessor,
     ) -> anyhow::Result<()> {
         self.try_reserve_gas_from_payer(tx, gas_price, context, state)
-            .map_err(Into::into)
     }
 
     fn try_reserve_gas_for_proof(
@@ -211,7 +214,7 @@ where
     }
 }
 
-impl<'a, S: Spec, T> SequencerAuthorization<S> for StandardProvenRollupCapabilities<'a, S, T> {
+impl<S: Spec, T> SequencerAuthorization<S> for StandardProvenRollupCapabilities<'_, S, T> {
     fn is_preferred_sequencer(
         &self,
         sequencer: &<S::Da as DaSpec>::Address,
@@ -221,7 +224,7 @@ impl<'a, S: Spec, T> SequencerAuthorization<S> for StandardProvenRollupCapabilit
     }
 }
 
-impl<'a, S: Spec, T> TransactionAuthorizer<S> for StandardProvenRollupCapabilities<'a, S, T> {
+impl<S: Spec, T> TransactionAuthorizer<S> for StandardProvenRollupCapabilities<'_, S, T> {
     /// Prevents duplicate transactions from running.
     fn check_uniqueness(
         &self,
@@ -295,7 +298,7 @@ impl<'a, S: Spec, T> TransactionAuthorizer<S> for StandardProvenRollupCapabiliti
     }
 }
 
-impl<'a, S: Spec, T> ProofProcessor<S> for StandardProvenRollupCapabilities<'a, S, T> {
+impl<S: Spec, T> ProofProcessor<S> for StandardProvenRollupCapabilities<'_, S, T> {
     #[cfg(feature = "native")]
     type BondingProofService<K: HasKernel<S>> = BondingProofServiceImpl<S, K>;
 
@@ -367,7 +370,7 @@ impl<'a, S: Spec, T> ProofProcessor<S> for StandardProvenRollupCapabilities<'a, 
     }
 }
 
-impl<'a, S: Spec, T> SequencerRemuneration<S> for StandardProvenRollupCapabilities<'a, S, T> {
+impl<S: Spec, T> SequencerRemuneration<S> for StandardProvenRollupCapabilities<'_, S, T> {
     fn reward_sequencer_or_refund<
         Accessor: StateReader<Kernel, Error = Infallible>
             + StateWriter<Kernel, Error = Infallible>

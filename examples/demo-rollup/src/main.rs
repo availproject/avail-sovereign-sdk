@@ -13,6 +13,7 @@ use sov_demo_rollup::{
     MockNomtDemoRollup,
 };
 use sov_mock_da::storable::service::StorableMockDaService;
+use sov_modules_api::capabilities::RollupHeight;
 use sov_modules_api::execution_mode::Native;
 use sov_modules_rollup_blueprint::logging::initialize_logging;
 use sov_modules_rollup_blueprint::{FullNodeBlueprint, Rollup};
@@ -46,6 +47,10 @@ struct Args {
     /// Listen address for Prometheus exporter.
     #[arg(long, default_value = "127.0.0.1:9845")]
     prometheus_exporter_bind: String,
+
+    /// Stops the rollup at a given height.
+    #[arg(long, default_value = None)]
+    stop_at_rollup_height: Option<u64>,
 }
 
 #[derive(clap::ValueEnum, Clone, Debug)]
@@ -90,6 +95,7 @@ async fn run() -> anyhow::Result<()> {
         "Running demo rollup with prover config"
     );
 
+    let stop_at_rollup_height = args.stop_at_rollup_height.map(RollupHeight::new);
     match (args.da_layer, args.storage) {
         (SupportedDaLayer::Mock, SupportedStorage::Jmt) => {
             let prover_config = prover_config_disc
@@ -98,6 +104,7 @@ async fn run() -> anyhow::Result<()> {
                 &GenesisPaths::from_dir(&args.genesis_config_dir),
                 rollup_config_path,
                 prover_config,
+                args.stop_at_rollup_height.map(RollupHeight::new),
             )
             .await
             .context("Failed to initialize MockDa rollup")?;
@@ -110,6 +117,7 @@ async fn run() -> anyhow::Result<()> {
                 &GenesisPaths::from_dir(&args.genesis_config_dir),
                 rollup_config_path,
                 prover_config,
+                stop_at_rollup_height,
             )
             .await
             .context("Failed to initialize NOMT based MockDa rollup")?;
@@ -122,6 +130,7 @@ async fn run() -> anyhow::Result<()> {
                 &GenesisPaths::from_dir(&args.genesis_config_dir),
                 rollup_config_path,
                 prover_config,
+                stop_at_rollup_height,
             )
             .await
             .context("Failed to initialize Celestia rollup")?;
@@ -134,6 +143,7 @@ async fn run() -> anyhow::Result<()> {
                 &GenesisPaths::from_dir(&args.genesis_config_dir),
                 rollup_config_path,
                 prover_config,
+                stop_at_rollup_height,
             )
             .await
             .context("Failed to initialize Celestia rollup")?;
@@ -187,20 +197,23 @@ async fn new_rollup_with_celestia_da(
     rt_genesis_paths: &GenesisPaths,
     rollup_config_path: &str,
     prover_config: Option<RollupProverConfig<Risc0>>,
+    stop_at_rollup_height: Option<RollupHeight>,
 ) -> anyhow::Result<Rollup<CelestiaDemoRollup<Native>, Native>> {
     debug!(config_path = rollup_config_path, "Starting Celestia rollup");
 
     let rollup_config: RollupConfig<MultiAddressEvm, CelestiaService> =
         from_toml_path(rollup_config_path).with_context(|| {
-            format!(
-                "Failed to read rollup configuration from {}",
-                rollup_config_path
-            )
+            format!("Failed to read rollup configuration from {rollup_config_path}")
         })?;
 
     let celestia_rollup = CelestiaDemoRollup::<Native>::default();
     celestia_rollup
-        .create_new_rollup(rt_genesis_paths, rollup_config, prover_config)
+        .create_new_rollup(
+            rt_genesis_paths,
+            rollup_config,
+            prover_config,
+            stop_at_rollup_height,
+        )
         .await
 }
 
@@ -208,20 +221,23 @@ async fn new_rollup_with_celestia_da_and_nomt(
     rt_genesis_paths: &GenesisPaths,
     rollup_config_path: &str,
     prover_config: Option<RollupProverConfig<Risc0>>,
+    stop_at_rollup_height: Option<RollupHeight>,
 ) -> anyhow::Result<Rollup<CelestiaNomtDemoRollup<Native>, Native>> {
     debug!(config_path = rollup_config_path, "Starting Celestia rollup");
 
     let rollup_config: RollupConfig<MultiAddressEvm, CelestiaService> =
         from_toml_path(rollup_config_path).with_context(|| {
-            format!(
-                "Failed to read rollup configuration from {}",
-                rollup_config_path
-            )
+            format!("Failed to read rollup configuration from {rollup_config_path}")
         })?;
 
     let celestia_rollup = CelestiaNomtDemoRollup::<Native>::default();
     celestia_rollup
-        .create_new_rollup(rt_genesis_paths, rollup_config, prover_config)
+        .create_new_rollup(
+            rt_genesis_paths,
+            rollup_config,
+            prover_config,
+            stop_at_rollup_height,
+        )
         .await
 }
 
@@ -277,6 +293,7 @@ async fn new_rollup_with_mock_da_and_jmt(
     rt_genesis_paths: &GenesisPaths,
     rollup_config_path: &str,
     prover_config: Option<RollupProverConfig<Risc0>>,
+    stop_at_rollup_height: Option<RollupHeight>,
 ) -> anyhow::Result<Rollup<MockDemoRollup<Native>, Native>> {
     debug!(
         config_path = rollup_config_path,
@@ -285,15 +302,17 @@ async fn new_rollup_with_mock_da_and_jmt(
 
     let rollup_config: RollupConfig<MultiAddressEvm, StorableMockDaService> =
         from_toml_path(rollup_config_path).with_context(|| {
-            format!(
-                "Failed to read rollup configuration from {}",
-                rollup_config_path
-            )
+            format!("Failed to read rollup configuration from {rollup_config_path}")
         })?;
 
     let mock_rollup = MockDemoRollup::<Native>::default();
     mock_rollup
-        .create_new_rollup(rt_genesis_paths, rollup_config, prover_config)
+        .create_new_rollup(
+            rt_genesis_paths,
+            rollup_config,
+            prover_config,
+            stop_at_rollup_height,
+        )
         .await
 }
 
@@ -301,6 +320,7 @@ async fn new_rollup_with_mock_da_and_nomt(
     rt_genesis_paths: &GenesisPaths,
     rollup_config_path: &str,
     prover_config: Option<RollupProverConfig<Risc0>>,
+    stop_at_rollup_height: Option<RollupHeight>,
 ) -> anyhow::Result<Rollup<MockNomtDemoRollup<Native>, Native>> {
     debug!(
         config_path = rollup_config_path,
@@ -309,14 +329,16 @@ async fn new_rollup_with_mock_da_and_nomt(
 
     let rollup_config: RollupConfig<MultiAddressEvm, StorableMockDaService> =
         from_toml_path(rollup_config_path).with_context(|| {
-            format!(
-                "Failed to read rollup configuration from {}",
-                rollup_config_path
-            )
+            format!("Failed to read rollup configuration from {rollup_config_path}")
         })?;
 
     let mock_rollup = MockNomtDemoRollup::<Native>::default();
     mock_rollup
-        .create_new_rollup(rt_genesis_paths, rollup_config, prover_config)
+        .create_new_rollup(
+            rt_genesis_paths,
+            rollup_config,
+            prover_config,
+            stop_at_rollup_height,
+        )
         .await
 }

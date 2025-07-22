@@ -64,7 +64,7 @@ impl<'a, S: Spec> Staker<'a, S> {
     }
 }
 
-impl<'a, S> StakeRegistration for Staker<'a, S>
+impl<S> StakeRegistration for Staker<'_, S>
 where
     S: Spec,
 {

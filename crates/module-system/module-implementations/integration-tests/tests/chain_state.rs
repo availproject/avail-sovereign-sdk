@@ -17,7 +17,11 @@ fn setup() -> (TestUser<S>, TestRunner<TestKernelUpdatesRuntime<S>, S>) {
     let genesis_config =
         HighLevelOptimisticGenesisConfig::generate().add_accounts_with_default_balance(1);
 
-    let admin = genesis_config.additional_accounts.first().unwrap().clone();
+    let admin = genesis_config
+        .additional_accounts()
+        .first()
+        .unwrap()
+        .clone();
 
     let genesis = GenesisConfig::from_minimal_config(
         genesis_config.into(),

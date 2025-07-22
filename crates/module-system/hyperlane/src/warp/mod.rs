@@ -442,7 +442,7 @@ where
     ) -> anyhow::Result<TokenId> {
         let holder: DerivedHolder = warp_route.0.into();
         self.bank.create_token(
-            format!("Synthetic token for {}", warp_route),
+            format!("Synthetic token for {warp_route}"),
             Some(decimals),
             Amount::ZERO,              // No initial balance
             holder.to_payable(), // Mint the initial balance to the warp route. Since it's 0, this doesn't matter - but use the holder anyway

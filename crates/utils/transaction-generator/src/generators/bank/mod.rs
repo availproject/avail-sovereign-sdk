@@ -253,15 +253,13 @@ impl<S: Spec> ChangelogEntry for BankChangeLogEntry<S> {
                 let found_supply = &rollup_state_accessor.get_total_supply(token_id).await;
                 assert_eq!(
                     found_supply, total_supply,
-                    "Unexpected total supply of {}",
-                    token_id,
+                    "Unexpected total supply of {token_id}",
                 );
             }
             BankChangeLogEntry::TokenFrozen { token_id } => {
                 assert!(
                     rollup_state_accessor.is_frozen(token_id).await,
-                    "Token with id {} should be frozen",
-                    token_id
+                    "Token with id {token_id} should be frozen"
                 );
             }
         }

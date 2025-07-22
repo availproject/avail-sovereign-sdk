@@ -1,5 +1,6 @@
 mod da_simulation;
 mod registered;
+mod registered_operator_mode;
 mod sequencer;
 mod stf_tests;
 mod tx_revert_tests;
@@ -14,11 +15,14 @@ use sov_modules_api::transaction::{
     PriorityFeeBips, Transaction, TxDetails, UnsignedTransaction, VersionedTx,
 };
 use sov_modules_api::{
-    Amount, ApiStateAccessor, DaSpec, FullyBakedTx, Gas, PrivateKey, RawTx, Rewards, Spec,
+    Amount, ApiStateAccessor, DaSpec, FullyBakedTx, Gas, GasArray, GasSpec, PrivateKey, RawTx,
+    Rewards, Spec, TxEffect,
 };
 use sov_modules_stf_blueprint::{BatchReceipt, Runtime};
+use sov_rollup_interface::da::RelevantBlobs;
 use sov_sequencer_registry::{AllowedSequencerError, SequencerRegistry};
 use sov_test_utils::runtime::genesis::optimistic::HighLevelOptimisticGenesisConfig;
+use sov_test_utils::runtime::traits::MinimalGenesis;
 use sov_test_utils::runtime::{config_gas_token_id, Payable, TestRunner};
 use sov_test_utils::{
     generate_optimistic_runtime, TestSequencer, TestUser, TEST_DEFAULT_MAX_FEE,
@@ -61,10 +65,10 @@ fn setup(
 
     for _ in 0..nb_of_users {
         genesis_config
-            .additional_accounts
+            .additional_accounts_mut()
             .push(TestUser::<S>::generate(TEST_DEFAULT_USER_BALANCE));
     }
-    let admin = genesis_config.additional_accounts[0].address();
+    let admin = genesis_config.additional_accounts()[0].address();
 
     let genesis = GenesisConfig::from_minimal_config(
         genesis_config.clone().into(),
@@ -78,7 +82,7 @@ fn setup(
 
     (
         runner,
-        genesis_config.additional_accounts,
+        genesis_config.additional_accounts().clone(),
         sequencer_account,
     )
 }
@@ -238,7 +242,7 @@ pub fn new_test_blob_from_batch(
 
 /// Builds a new test blob for direct sequencer registration.
 pub fn new_test_blob_for_direct_registration(
-    tx: RawTx,
+    tx: FullyBakedTx,
     address: &[u8],
     hash: [u8; 32],
 ) -> <MockDaSpec as DaSpec>::BlobTransaction {
@@ -284,6 +288,85 @@ pub(crate) fn reset_constants() {
         "SOV_TEST_CONST_OVERRIDE_MAX_UNREGISTERED_SEQUENCER_EXEC_GAS_PER_TX",
         "[10000000,10000000]",
     );
+}
+
+struct TxsCheckResult<S: Spec> {
+    batch_receipt: BatchReceipt<S>,
+    seq_fee: Amount,
+    seq_penalty: Amount,
+    gas_value_charged_to_user: Amount,
+    total_gas: <S as GasSpec>::Gas,
+}
+
+fn do_check_txs<RT>(
+    blobs: RelevantBlobs<MockBlob>,
+    txs_len: usize,
+    priority_fee_bips: PriorityFeeBips,
+    runner: &mut TestRunner<RT, S>,
+) -> TxsCheckResult<S>
+where
+    RT: Runtime<S> + MinimalGenesis<S>,
+{
+    let result = runner.execute::<RelevantBlobs<MockBlob>>(blobs);
+    let batch_receipt = result.0.batch_receipts[0].clone();
+
+    let gas_price = &batch_receipt.inner.gas_price;
+    let tx_receipts = &batch_receipt.tx_receipts;
+    let ignored_tx_receipts = &batch_receipt.ignored_tx_receipts;
+
+    assert_eq!(tx_receipts.len() + ignored_tx_receipts.len(), txs_len);
+
+    let mut seq_fee = Amount::ZERO;
+    let mut seq_penalty = Amount::ZERO;
+    let mut gas_value_charged_to_user = Amount::ZERO;
+
+    let mut total_gas = <S as GasSpec>::Gas::ZEROED;
+
+    for tx_receipt in tx_receipts {
+        match &tx_receipt.receipt {
+            TxEffect::Successful(tx_contents) => {
+                total_gas = total_gas.checked_combine(&tx_contents.gas_used).unwrap();
+                let gas_value = tx_contents.gas_used.value(gas_price);
+                gas_value_charged_to_user =
+                    gas_value_charged_to_user.checked_add(gas_value).unwrap();
+                seq_fee = seq_fee
+                    .checked_add(priority_fee_bips.apply(gas_value).unwrap())
+                    .unwrap();
+            }
+            TxEffect::Skipped(tx_contents) => {
+                total_gas = total_gas.checked_combine(&tx_contents.gas_used).unwrap();
+                let gas_value = tx_contents.gas_used.value(gas_price);
+                // Sequencer doesn't get the fee and is penalized
+                seq_penalty = seq_penalty.checked_add(gas_value).unwrap();
+            }
+            TxEffect::Reverted(tx_contents) => {
+                total_gas = total_gas.checked_combine(&tx_contents.gas_used).unwrap();
+                // From gas usage point of view the `Successful & Reverted` cases are the same.
+                let gas_value = tx_contents.gas_used.value(gas_price);
+                gas_value_charged_to_user =
+                    gas_value_charged_to_user.checked_add(gas_value).unwrap();
+                seq_fee = seq_fee
+                    .checked_add(priority_fee_bips.apply(gas_value).unwrap())
+                    .unwrap();
+            }
+        }
+    }
+
+    for ignored_tx_receipt in ignored_tx_receipts {
+        let ignored = &ignored_tx_receipt.ignored;
+        let gas_used = &ignored.gas_used;
+        total_gas = total_gas.checked_combine(gas_used).unwrap();
+        let gas_value = gas_used.value(gas_price);
+        seq_penalty = seq_penalty.checked_add(gas_value).unwrap();
+    }
+
+    TxsCheckResult {
+        batch_receipt,
+        seq_fee,
+        seq_penalty,
+        gas_value_charged_to_user,
+        total_gas,
+    }
 }
 
 pub(crate) mod helpers {

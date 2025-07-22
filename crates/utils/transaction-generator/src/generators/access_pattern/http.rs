@@ -60,8 +60,7 @@ impl HttpStorageAccessClient {
 
         self.client
             .query_rest_endpoint::<ResponseObject<MapResponse<HooksConfig>>>(&format!(
-                "/modules/access-pattern/state/pre-hook/items/{item}{}",
-                rollup_height_param
+                "/modules/access-pattern/state/pre-hook/items/{item}{rollup_height_param}"
             ))
             .await
             .unwrap()
@@ -78,8 +77,7 @@ impl HttpStorageAccessClient {
 
         self.client
             .query_rest_endpoint::<ResponseObject<MapResponse<HooksConfig>>>(&format!(
-                "/modules/access-pattern/state/post-hook/items/{item}{}",
-                rollup_height_param
+                "/modules/access-pattern/state/post-hook/items/{item}{rollup_height_param}"
             ))
             .await
             .unwrap()
@@ -97,8 +95,7 @@ impl HttpStorageAccessClient {
         let response = self
             .client
             .query_rest_endpoint::<ResponseObject<ValueResponse<S::Address>>>(&format!(
-                "/modules/access-pattern/state/admin{}",
-                rollup_height_param
+                "/modules/access-pattern/state/admin{rollup_height_param}"
             ))
             .await
             .unwrap();

@@ -44,7 +44,7 @@ impl std::str::FromStr for TelegrafSocketConfig {
                 let transport = match proto_str.to_lowercase().as_str() {
                     "tcp" => Transport::Tcp,
                     "udp" => Transport::Udp,
-                    _ => return Err(format!("Unknown transport protocol: {}", proto_str)),
+                    _ => return Err(format!("Unknown transport protocol: {proto_str}")),
                 };
                 (transport, addr)
             }
@@ -53,7 +53,7 @@ impl std::str::FromStr for TelegrafSocketConfig {
 
         let addr = rest
             .parse::<std::net::SocketAddr>()
-            .map_err(|e| format!("Invalid address '{}': {}", rest, e))?;
+            .map_err(|e| format!("Invalid address '{rest}': {e}"))?;
 
         Ok(TelegrafSocketConfig { transport, addr })
     }

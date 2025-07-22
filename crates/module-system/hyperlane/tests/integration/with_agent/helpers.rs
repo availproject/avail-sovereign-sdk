@@ -112,9 +112,9 @@ pub fn generate_setup() -> Setup {
     let genesis_config =
         HighLevelZkGenesisConfig::generate_with_additional_accounts(ANVIL_ACCOUNTS.len());
 
-    let relayer = genesis_config.additional_accounts[0].clone();
+    let relayer = genesis_config.additional_accounts()[0].clone();
     let validators = (1..ANVIL_ACCOUNTS.len())
-        .map(|n| genesis_config.additional_accounts[n].clone())
+        .map(|n| genesis_config.additional_accounts()[n].clone())
         .collect();
     let sequencer = genesis_config.initial_sequencer.clone();
     let prover = genesis_config.initial_prover.clone();
@@ -265,7 +265,7 @@ impl HyperlaneBuilder {
         let rollup_port = self.rollup_port.expect("Rollup port must be set");
 
         // Start container with just basic env and no processes
-        let container = self
+        let mut builder = self
             .image
             // map needed ports to localhost
             .with_exposed_port(ANVIL_PORT.tcp())
@@ -281,7 +281,18 @@ impl HyperlaneBuilder {
             .with_copy_to("/agent-config.json", agent_config(rollup_port))
             .with_env_var("CONFIG_FILES", "/agent-config.json")
             // a dummy command because we will populate services by execs appropriately
-            .with_cmd(["tail", "-f", "/dev/null"])
+            .with_cmd(["tail", "-f", "/dev/null"]);
+
+        // The hyperlane CLI accesses GitHub APIs quite heavily for its GitHub hosted
+        // registry, this can cause rate limiting in CI jobs. Include the github token
+        // so we use authenticated requests to try avoid this
+        if let Ok(token) = std::env::var("GITHUB_TOKEN") {
+            // `hyperlane` cli tool will use this env var by default as an auth token
+            // if it is set.
+            builder = builder.with_env_var("GH_AUTH_TOKEN", token);
+        }
+
+        let container = builder
             .start()
             .await
             .expect("Failed starting hyperlane image");

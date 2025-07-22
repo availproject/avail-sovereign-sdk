@@ -3,10 +3,15 @@ use std::sync::{Arc, RwLock};
 
 use anyhow::Context;
 use nomt::hasher::BinaryHasher;
-use nomt::{Nomt, Options, SessionParams, WitnessMode};
+use nomt::{Nomt, SessionParams, WitnessMode};
 use sov_rollup_interface::reexports::digest;
 
 use super::commit_flag::{CommitFlag, CommitStatus};
+use crate::config::RollupDbConfig;
+use crate::metrics::nomt::{NomtBeginSessionMetric, NomtDbMetric};
+
+const KERNEL: &str = "kernel_state";
+const USER: &str = "user_state";
 
 /// Contains all the most recent rollup data.
 pub struct NomtStateDb<H> {
@@ -17,16 +22,13 @@ pub struct NomtStateDb<H> {
 
 impl<H: digest::Digest<OutputSize = digest::typenum::U32> + Send + Sync> NomtStateDb<H> {
     /// Initialize a new [` NomtStateDb `] in the given path.
-    pub fn new(path: impl AsRef<std::path::Path>) -> anyhow::Result<Self> {
-        let db_path = path.as_ref();
-        let commit_flag = CommitFlag::new(db_path);
+    pub fn new(config: RollupDbConfig) -> anyhow::Result<Self> {
+        let commit_flag = CommitFlag::new(&config.path);
+
+        tracing::debug!(options = ?config, "Opening NOMT");
 
         let kernel = {
-            let mut opts = sov_nomt_default_options();
-            opts.rollback(true);
-            opts.max_rollback_log_len(1);
-            opts.hashtable_buckets(256_000);
-            opts.path(db_path.join("kernel_nomt_db"));
+            let opts = config.get_kernel_options();
             Nomt::<BinaryHasher<H>>::open(opts)?
         };
 
@@ -66,14 +68,7 @@ impl<H: digest::Digest<OutputSize = digest::typenum::U32> + Send + Sync> NomtSta
         }
 
         let user = {
-            let mut opts = sov_nomt_default_options();
-            // TODO: This is going to be exposed in config parameters: https://github.com/Sovereign-Labs/sovereign-sdk-wip/issues/2634
-            opts.hashtable_buckets(if cfg!(debug_assertions) {
-                1_000_000
-            } else {
-                15_000_000
-            });
-            opts.path(db_path.join("user_nomt_db"));
+            let opts = config.get_user_options();
             Nomt::<BinaryHasher<H>>::open(opts)?
         };
 
@@ -158,6 +153,15 @@ impl<H: digest::Digest<OutputSize = digest::typenum::U32> + Send + Sync> NomtSta
             kernel: self.kernel.root(),
         }
     }
+
+    pub(crate) fn send_metrics(&self) {
+        let user_metrics = NomtDbMetric::new(USER, &self.user);
+        let kernel_metrics = NomtDbMetric::new(KERNEL, &self.kernel);
+        sov_metrics::track_metrics(|tracker| {
+            tracker.submit(user_metrics);
+            tracker.submit(kernel_metrics);
+        });
+    }
 }
 
 #[derive(Debug)]
@@ -226,9 +230,8 @@ impl<H, K: Clone> Clone for NomtSessionBuilder<H, K> {
 impl<H, K> NomtSessionBuilder<H, K> {
     /// Parameters:
     ///  * `state_db` - Reference to [`NomtStateDb`].
-    ///  * `relevant_snapshot_refs`: In revered chronological order, as [`nomt::SessionParams::overlay`] expects
+    ///  * `relevant_snapshot_refs`: In revered chronological order, as [`SessionParams::overlay`] expects
     ///  * `all_snapshots`. Should be the same structure that is used by a storage manager
-    #[allow(dead_code)]
     pub(crate) fn new(
         state_db: Arc<NomtStateDb<H>>,
         relevant_snapshot_refs: Vec<K>,
@@ -253,6 +256,7 @@ where
     /// **Commiting storage will be blocked until all built sessions are deallocated.**
     #[tracing::instrument(skip(self))]
     pub fn begin_user_session(&self) -> anyhow::Result<nomt::Session<BinaryHasher<H>>> {
+        let start = std::time::Instant::now();
         let params = {
             let mut overlays = Vec::with_capacity(self.relevant_snapshot_refs.len());
             let snapshots = self.all_snapshots.read().expect("Snapshots lock poisoned");
@@ -275,7 +279,17 @@ where
                 })?
                 .witness_mode(WitnessMode::read_write())
         };
-        Ok(self.state_db.user.begin_session(params))
+        let session = self.state_db.user.begin_session(params);
+        let init_time = start.elapsed();
+        let overlays = self.relevant_snapshot_refs.len();
+        sov_metrics::track_metrics(|tracker| {
+            tracker.submit(NomtBeginSessionMetric {
+                db: USER,
+                overlays,
+                init_time,
+            });
+        });
+        Ok(session)
     }
 
     /// Build [`nomt::Session`] for [`crate::namespaces::KernelNamespace`].
@@ -284,6 +298,7 @@ where
     /// **Commiting storage will be blocked until all built sessions are deallocated.**
     #[tracing::instrument(skip(self))]
     pub fn begin_kernel_session(&self) -> anyhow::Result<nomt::Session<BinaryHasher<H>>> {
+        let start = std::time::Instant::now();
         let params = {
             let mut overlays = Vec::with_capacity(self.relevant_snapshot_refs.len());
             let snapshots = self.all_snapshots.read().expect("Snapshots lock poisoned");
@@ -306,7 +321,17 @@ where
                 })?
                 .witness_mode(WitnessMode::read_write())
         };
-        Ok(self.state_db.kernel.begin_session(params))
+        let session = self.state_db.kernel.begin_session(params);
+        let init_time = start.elapsed();
+        let overlays = self.relevant_snapshot_refs.len();
+        sov_metrics::track_metrics(|tracker| {
+            tracker.submit(NomtBeginSessionMetric {
+                db: KERNEL,
+                overlays,
+                init_time,
+            });
+        });
+        Ok(session)
     }
 }
 
@@ -321,16 +346,6 @@ where
 {
     let empty_snapshots = Arc::new(RwLock::new(HashMap::new()));
     NomtSessionBuilder::new(state_db, Vec::new(), empty_snapshots)
-}
-
-/// All non-path-related options, tuned for optimal performance in sov-rollup
-pub(crate) fn sov_nomt_default_options() -> Options {
-    let mut opts = Options::new();
-    // Draft values, needs to be benchmarked on the target system type.
-    opts.commit_concurrency(2);
-    opts.prepopulate_page_cache(true);
-    opts.metrics(true);
-    opts
 }
 
 #[cfg(test)]
@@ -351,7 +366,8 @@ mod tests {
     #[test]
     fn test_session_can_be_built_while_finalized() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let state_db = Arc::new(NomtStateDb::<H>::new(temp_dir.path()).unwrap());
+        let config = RollupDbConfig::default_in_path(temp_dir.path().to_path_buf());
+        let state_db = Arc::new(NomtStateDb::<H>::new(config).unwrap());
 
         // First produce some overlays with data
         let all_overlays: HashMap<u64, StateOverlay> = HashMap::new();
@@ -394,8 +410,7 @@ mod tests {
 
                 assert_eq!(
                     user_value, expected_value,
-                    "failed to check value for ref: {}",
-                    this_ref
+                    "failed to check value for ref: {this_ref}"
                 );
                 assert_eq!(kernel_value, expected_value);
             }
@@ -454,7 +469,8 @@ mod tests {
             nomt::KeyReadWrite::Write(Some(value_3.clone())),
         )];
 
-        let state_db = Arc::new(NomtStateDb::<H>::new(temp_dir.path()).unwrap());
+        let config = RollupDbConfig::default_in_path(temp_dir.path().to_path_buf());
+        let state_db = Arc::new(NomtStateDb::<H>::new(config).unwrap());
 
         let all_overlays: HashMap<u64, StateOverlay> = HashMap::new();
         let all_overlays = Arc::new(RwLock::new(all_overlays));
@@ -528,7 +544,8 @@ mod tests {
 
         // Reopen the state db.
         drop(state_db);
-        let state_db = Arc::new(NomtStateDb::<H>::new(temp_dir.path()).unwrap());
+        let config = RollupDbConfig::default_in_path(temp_dir.path().to_path_buf());
+        let state_db = Arc::new(NomtStateDb::<H>::new(config).unwrap());
 
         let builder =
             NomtSessionBuilder::<H, u64>::new(state_db.clone(), Vec::new(), all_overlays.clone());

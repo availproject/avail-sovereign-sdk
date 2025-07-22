@@ -199,12 +199,12 @@ fn test_penalize_sequencer() {
             match &result.tx_receipt {
                 sov_modules_api::TxEffect::Skipped(skipped) => {
                     if let TxProcessingError::OutOfGas(error_message) = &skipped.error {
-                        assert!(error_message.contains("The amount to charge is greater than the funds available in the meter."), "Error message doesn't contain with the expected phrase. Got: {}", error_message);
+                        assert!(error_message.contains("The amount to charge is greater than the funds available in the meter."), "Error message doesn't contain with the expected phrase. Got: {error_message}");
                     } else {
                         panic!("Expected CannotReserveGas error, but got a different SkippedReason: {:?}", skipped.error);
                     }
                 },
-                unexpected => panic!("Expected transaction to be skipped, but got: {:?}", unexpected),
+                unexpected => panic!("Expected transaction to be skipped, but got: {unexpected:?}"),
             }
 
             let current_stake = sov_sequencer_registry::SequencerRegistry::<S>::default()
@@ -279,14 +279,13 @@ fn test_authentication_out_of_gas_error() {
                     if let TxProcessingError::OutOfGas(error_message) = &skipped.error {
                         assert!(
                             error_message.contains("The amount to charge is greater than the funds available in the meter."),
-                            "Error message doesn't contain with the expected phrase. Got: {}",
-                            error_message
+                            "Error message doesn't contain with the expected phrase. Got: {error_message}"
                         );
                     } else {
                         panic!("Expected CannotReserveGas error, but got a different SkippedReason: {:?}", skipped.error);
                     }
                 },
-                unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+                unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
             };
 
             let tx_receipt = &batch_receipt.tx_receipts[1];
@@ -294,7 +293,7 @@ fn test_authentication_out_of_gas_error() {
                 sov_modules_api::TxEffect::Skipped(skipped) => {
                     assert_matches!(skipped.error, TxProcessingError::AuthenticationFailed(_));
                 },
-                unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+                unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
             };
 
             // Check that sequencer was penalized for invalid transactions.

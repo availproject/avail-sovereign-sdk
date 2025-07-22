@@ -18,7 +18,7 @@ use crate::shares::BlobIterator;
 use crate::verifier::address::CelestiaAddress;
 use crate::CelestiaHeader;
 
-pub(crate) const APP_VERSION: AppVersion = AppVersion::V3;
+pub(crate) const APP_VERSION: AppVersion = AppVersion::V4;
 pub(crate) const SUPPORTED_SHARE_VERSION: u8 = 1;
 
 #[derive(Debug, PartialEq, PartialOrd, Ord, Clone, Eq, Hash, Serialize, Deserialize)]
@@ -295,12 +295,9 @@ impl NamespaceBoundaryProof {
 pub mod tests {
     use std::str::FromStr;
 
-    use celestia_types::nmt::NS_SIZE;
-
-    use crate::shares::SovShare;
     use crate::test_helper::files::*;
     use crate::test_helper::ROLLUP_BATCH_NAMESPACE;
-    use crate::types::{NamespaceData, NamespaceRelevantData, TmHash, APP_VERSION};
+    use crate::types::{NamespaceData, NamespaceRelevantData, TmHash};
 
     fn test_serialize_roundtrip(raw: [u8; 32]) {
         let tm_hash = TmHash::try_from(raw).unwrap();
@@ -331,41 +328,6 @@ pub mod tests {
     #[test_strategy::proptest]
     fn proptest_serde_roundtrip(raw: [u8; 32]) {
         test_serialize_roundtrip(raw);
-    }
-
-    #[test]
-    #[ignore = "Broken till share V1 support is added: https://github.com/eigerco/lumina/issues/430"]
-    // When support is added, remove `SovShare` and use `celestia_types::Share` everywhere
-    fn compare_sov_share_methods() {
-        let data = vec![12; 450];
-        let blob =
-            celestia_types::blob::Blob::new(ROLLUP_BATCH_NAMESPACE, data, APP_VERSION).unwrap();
-        let share = blob.to_shares().unwrap().first().unwrap().clone();
-        let mut raw = *share.data();
-        // Change it to version 1 for full comparison.
-        let version = 1;
-        raw[NS_SIZE] = (version << 1) | (raw[NS_SIZE] & 0x01);
-        let share = celestia_types::Share::from_raw(&raw).unwrap();
-        let sov_share = SovShare::new(share.clone()).unwrap();
-
-        // + sequence_length
-        let sequence_length = share.sequence_length().unwrap();
-        let sequence_length_sov = sov_share.sequence_length().unwrap();
-        assert_eq!(sequence_length as u64, sequence_length_sov);
-        // - blob_signer: This one is missing
-        let _signer = sov_share.blob_signer().unwrap();
-        // + raw_inner_ref
-        let raw_inner_ref = share.as_ref();
-        let sov_raw_inner_ref = sov_share.raw_inner_ref();
-        assert_eq!(raw_inner_ref, sov_raw_inner_ref);
-        // - `payload` / `payload_ref`. Broken because of signer
-        let payload_ref = share.payload().unwrap();
-        let sov_payload_ref = sov_share.payload_ref();
-        assert_eq!(payload_ref, sov_payload_ref);
-        // + namespace
-        let namespace = share.namespace();
-        let sov_namespace = sov_share.namespace();
-        assert_eq!(namespace, sov_namespace);
     }
 
     #[test]

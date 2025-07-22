@@ -10,7 +10,7 @@ use sov_modules_api::runtime::capabilities::{BlobSelector, Kernel as KernelTrait
 #[cfg(feature = "native")]
 use sov_modules_api::AccessoryStateReaderAndWriter;
 use sov_modules_api::{
-    BootstrapWorkingSet, DaSpec, Gas, InjectedControlFlow, IterableBatchWithId,
+    BootstrapWorkingSet, DaSpec, Gas, HexHash, InjectedControlFlow, IterableBatchWithId,
     KernelStateAccessor, SelectedBlob, Spec, StateReader, VersionReader, VisibleSlotNumber,
 };
 use sov_rollup_interface::common::SlotNumber;
@@ -23,7 +23,7 @@ pub struct BasicKernel<'a, S: Spec> {
     pub blob_storage: &'a mut BlobStorage<S>,
 }
 
-impl<'a, S: Spec> BasicKernel<'a, S> {
+impl<S: Spec> BasicKernel<'_, S> {
     /// Gets a reference to the kernel's ChainState module.
     pub fn chain_state(&self) -> &ChainState<S> {
         self.chain_state
@@ -35,7 +35,7 @@ impl<'a, S: Spec> BasicKernel<'a, S> {
     }
 }
 
-impl<'a, S: Spec> KernelTrait<S> for BasicKernel<'a, S> {
+impl<S: Spec> KernelTrait<S> for BasicKernel<'_, S> {
     fn true_slot_number(&self, state: &mut BootstrapWorkingSet<'_, S>) -> SlotNumber {
         self.chain_state.true_slot_number_at_bootstrap(state)
     }
@@ -62,7 +62,7 @@ impl<'a, S: Spec> KernelTrait<S> for BasicKernel<'a, S> {
     }
 }
 
-impl<'b, S: Spec> BlobSelector for BasicKernel<'b, S> {
+impl<S: Spec> BlobSelector for BasicKernel<'_, S> {
     type Spec = S;
 
     const ACCEPTS_PREFERRED_BATCHES: bool = false;
@@ -72,7 +72,10 @@ impl<'b, S: Spec> BlobSelector for BasicKernel<'b, S> {
         current_blobs: RelevantBlobIters<&mut [<S::Da as DaSpec>::BlobTransaction]>,
         state: &mut KernelStateAccessor<'_, S>,
         cf: CF,
-    ) -> anyhow::Result<BlobSelectorOutput<SelectedBlob<S, IterableBatchWithId<S, CF>>>> {
+    ) -> anyhow::Result<(
+        BlobSelectorOutput<SelectedBlob<S, IterableBatchWithId<S, CF>>>,
+        Vec<HexHash>,
+    )> {
         Ok(self
             .blob_storage
             .select_blobs_as_based_sequencer(current_blobs, state, cf))
@@ -101,7 +104,7 @@ impl<'b, S: Spec> BlobSelector for BasicKernel<'b, S> {
     }
 }
 
-impl<'a, S: Spec> sov_modules_api::capabilities::ChainState for BasicKernel<'a, S> {
+impl<S: Spec> sov_modules_api::capabilities::ChainState for BasicKernel<'_, S> {
     type Spec = S;
 
     fn synchronize_chain(

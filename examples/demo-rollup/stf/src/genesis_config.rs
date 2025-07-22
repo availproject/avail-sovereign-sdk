@@ -19,7 +19,6 @@ use sov_paymaster::PaymasterConfig;
 use sov_prover_incentives::ProverIncentivesConfig;
 pub use sov_sequencer_registry::SequencerConfig;
 pub use sov_state::config::Config as StorageConfig;
-pub use sov_value_setter::ValueSetterConfig;
 
 /// Creates config for a rollup with some default settings, the config is used in demos and tests.
 use crate::runtime::GenesisConfig;
@@ -32,8 +31,6 @@ pub struct GenesisPaths {
     pub bank_genesis_path: PathBuf,
     /// Sequencer Registry genesis path.
     pub sequencer_genesis_path: PathBuf,
-    /// Value Setter genesis path.
-    pub value_setter_genesis_path: PathBuf,
     /// Accounts genesis path.
     pub accounts_genesis_path: PathBuf,
     /// Operator Incentives genesis path.
@@ -62,7 +59,6 @@ impl GenesisPaths {
         Self {
             bank_genesis_path: dir.as_ref().join("bank.json"),
             sequencer_genesis_path: dir.as_ref().join("sequencer_registry.json"),
-            value_setter_genesis_path: dir.as_ref().join("value_setter.json"),
             accounts_genesis_path: dir.as_ref().join("accounts.json"),
             operator_incentives_genesis_path: dir.as_ref().join("operator_incentives.json"),
             prover_incentives_genesis_path: dir.as_ref().join("prover_incentives.json"),
@@ -87,9 +83,6 @@ where
 
     let sequencer_registry_config: SequencerConfig<S> =
         read_genesis_json(&genesis_paths.sequencer_genesis_path)?;
-
-    let value_setter_config: ValueSetterConfig<S> =
-        read_genesis_json(&genesis_paths.value_setter_genesis_path)?;
 
     let operator_incentives_config: OperatorIncentivesConfig<S> =
         read_genesis_json(&genesis_paths.operator_incentives_genesis_path)?;
@@ -116,10 +109,11 @@ where
     let access_pattern: sov_test_modules::access_pattern::AccessPatternGenesisConfig<S> =
         read_genesis_json(&genesis_paths.access_pattern)?;
 
+    let synthetic_load_config = ();
+
     Ok(GenesisConfig::new(
         bank_config,
         sequencer_registry_config,
-        value_setter_config,
         operator_incentives_config,
         attester_incentives_config,
         prover_incentives_config,
@@ -130,6 +124,7 @@ where
         paymaster_config,
         evm_config,
         access_pattern,
+        synthetic_load_config,
     ))
 }
 

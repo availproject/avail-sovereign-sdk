@@ -18,7 +18,7 @@ use sov_test_utils::runtime::genesis::zk::config::HighLevelZkGenesisConfig;
 use sov_test_utils::runtime::sov_paymaster::{
     self, PayeePolicy, PayerGenesisConfig, PaymasterPolicyInitializer, SafeVec,
 };
-use sov_test_utils::runtime::{TestRunner, ValueSetterConfig};
+use sov_test_utils::runtime::TestRunner;
 use sov_test_utils::test_rollup::{GenesisSource, RollupBuilder, TestRollup};
 use sov_test_utils::{
     MockDaSpec, MockZkvm, RtAgnosticBlueprint, TestPreferredSequencer, TestProver, TestUser,
@@ -94,12 +94,12 @@ where
     let sequencer = TestPreferredSequencer::new(genesis_config.initial_sequencer.clone());
     let prover = genesis_config.initial_prover.clone();
 
-    let payer = genesis_config.additional_accounts[0].clone();
-    let admin_account = genesis_config.additional_accounts[1].clone();
-    let extra_account = genesis_config.additional_accounts[2].clone();
+    let payer = genesis_config.additional_accounts()[0].clone();
+    let admin_account = genesis_config.additional_accounts()[1].clone();
+    let extra_account = genesis_config.additional_accounts()[2].clone();
 
     let senders = (0..num_senders)
-        .map(|i| genesis_config.additional_accounts[i as usize + 3].clone())
+        .map(|i| genesis_config.additional_accounts()[i as usize + 3].clone())
         .collect::<Vec<_>>();
 
     let genesis = GenesisConfig::from_minimal_config(
@@ -127,9 +127,6 @@ where
             .as_ref()
             .try_into()
             .unwrap(),
-        },
-        ValueSetterConfig {
-            admin: admin_account.address(),
         },
         AccessPatternGenesisConfig {
             admin: admin_account.address(),
@@ -219,15 +216,5 @@ pub fn mock_da_risc0_host_args() -> Arc<&'static [u8]> {
         return Arc::new(vec![].leak());
     }
 
-    Arc::new(
-        std::fs::read(risc0::MOCK_DA_PATH)
-            .unwrap_or_else(|e| {
-                panic!(
-                    "Could not read guest elf file from `{}`. {}",
-                    risc0::MOCK_DA_PATH,
-                    e
-                )
-            })
-            .leak(),
-    )
+    Arc::new(risc0::MOCK_DA_ELF)
 }

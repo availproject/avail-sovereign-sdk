@@ -1,3 +1,39 @@
+# 2025-07-04
+- #3169 Exposes exponential backoff configuration in celestia adapter's configuration.
+- #3162 Removes the Hasher generic from the PublicKey trait's credential_id() method. (As well as making sure EthereumPublicKey's get hashed specifically with the Keccak256 hash.)
+- #3167 Changes the format of forced registration transactions on the DA layer, adding a single discriminant byte to specify that the standard authenticator should be used. This makes their format identical to standard transactions.
+
+# 2025-06-29
+- #3123 Replaces `sov-value-setter` with `sov-synthetic-load` in sov-demo-stf.
+- #3126 **BREAKING CHANGE** for running rollups: changes the format of the preferred sequencer PostgreSQL database. Any running rollups configured to run postgres in the sequencer will need to have the sequencer halted and the database wiped before restart. If there are pending soft-confirmations, they will be lost when the database is wiped.
+This PR adds initial support for state replication across multiple sequencers sharing the same PostgreSQL database, as the initial stage of implementing failover. For those wishing to test the replication functionality, there is a temporary config value to launch sequencers in replica mode; be aware that this config value will be removed without warning in a subsequent PR once failover is implemented.
+
+# 2025-06-27
+- #3120 Adds optional `stop_at_rollup_height` flag to the rollup. This is not a breaking change.
+
+# 2025-06-26
+- #3106 **BREAKING CHANGE** adds a *required* batch_execution_time_limit_millis configuration to the preferred sequencer. The sequencer 
+will not allow batches to continue growing once they reach this limit, even if that means causing downtime.
+- #3110 Swaps `StorageConfig` with `RollupDbConfig`. Change should be transparent for rollup struct.
+- #3112 adds validity distribution parameter to sov-soak generator
+- #3114 **BREAKING CHANGE** Updates rust to 1.85
+- #3137 **BREAKING CHANGE** Updates SP1 to 5.0.6
+
+# 2025-06-25
+- #3095 SOAK: inject MessageValidity as an argument to `run_generator_task_for_xx`
+
+# 2025-06-24 
+- #3083 Changes celestia rollup configuration in /demo-rollup to Operator mode. 
+# 2025-06-19
+- #2999 Reworks the sequencer's logic for opening/closing batches. Now the sequencer attempts to keep a few finalized slots in reserve rather than making them visible as quickly as possible. The number of such slots is configured by `ideal_lag_behind_finalized_slot` in the preferred sequencer config.
+- #3070 This PR introduces breaking changes to the testing framework.
+Access to genesis fields now requires calling the appropriate accessor methods. For examle before:
+ `genesis_config.additional_accounts[0].clone();` now:
+`genesis_config.additional_accounts()[0].clone();`
+
+# 2025-06-19
+- #3063 Add e2e tests for `OperatingMode::Operator`
+
 # 2025-06-18
 - #3061 Fixes an issue where the sequencer DB could become unreadable due to triggering a pathological case in RocksDB range deletions.
 
@@ -19,6 +55,7 @@
 - #2971 internal in sov-soak-tests
 
 - #3014 Adds `/modules/bank/tokens/gas_token` and `/modules/bank/tokens/gas_token/balances/{address}` endpoints to enable fetching the gas token id and gas token balances using the REST API endpoints.
+- #3009 Add new transaction types to the value setter module that will enable us to load test the framework more comprehensively.
 - #3000 Bumps the number of in-memory state transition infos to accommodate for the recent slow-down in zk proving in CI.
 
 # 2025-06-08

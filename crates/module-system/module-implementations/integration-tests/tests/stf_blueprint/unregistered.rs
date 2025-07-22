@@ -4,10 +4,12 @@ use helpers::*;
 use sov_attester_incentives::AttesterIncentives;
 use sov_bank::IntoPayable;
 use sov_mock_da::{MockAddress, MockBlob};
+use sov_modules_api::capabilities::TransactionAuthenticator;
 use sov_modules_api::macros::config_value;
 use sov_modules_api::transaction::{PriorityFeeBips, Transaction, UnsignedTransaction};
 use sov_modules_api::{
-    Amount, ApiStateAccessor, DaSpec, Gas, GasArray, ModuleInfo, RawTx, Rewards, Spec, TxEffect,
+    Amount, ApiStateAccessor, DaSpec, FullyBakedTx, Gas, GasArray, ModuleInfo, RawTx, Rewards,
+    Spec, TxEffect,
 };
 use sov_rollup_interface::da::RelevantBlobs;
 use sov_sequencer_registry::SequencerRegistry;
@@ -182,12 +184,7 @@ fn blob_too_expensive_tests() {
 
     let (mut runner, _, _) = setup(1);
 
-    let blob = make_blob(
-        RawTx {
-            data: vec![1, 2, 3],
-        },
-        MockAddress::new([22; 32]),
-    );
+    let blob = make_blob(FullyBakedTx::new(vec![1, 2, 3]), MockAddress::new([22; 32]));
     let unregistered_blobs = RelevantBlobs {
         proof_blobs: Default::default(),
         batch_blobs: vec![blob],
@@ -210,12 +207,7 @@ fn blob_test_max_slot_size() {
 
     let (mut runner, _, _) = setup(1);
 
-    let blob = make_blob(
-        RawTx {
-            data: vec![1, 2, 3],
-        },
-        MockAddress::new([22; 32]),
-    );
+    let blob = make_blob(FullyBakedTx::new(vec![1, 2, 3]), MockAddress::new([22; 32]));
     let unregistered_blobs = RelevantBlobs {
         proof_blobs: Default::default(),
         batch_blobs: vec![blob],
@@ -237,12 +229,7 @@ fn blob_test_max_allowed_data_size() {
 
     let (mut runner, _, _) = setup(1);
 
-    let blob = make_blob(
-        RawTx {
-            data: vec![1, 2, 3],
-        },
-        MockAddress::new([22; 32]),
-    );
+    let blob = make_blob(FullyBakedTx::new(vec![1, 2, 3]), MockAddress::new([22; 32]));
     let unregistered_blobs = RelevantBlobs {
         proof_blobs: Default::default(),
         batch_blobs: vec![blob],
@@ -254,6 +241,7 @@ fn blob_test_max_allowed_data_size() {
 }
 
 mod helpers {
+    use sov_modules_api::FullyBakedTx;
     use sov_modules_stf_blueprint::Runtime;
     use sov_test_utils::TEST_DEFAULT_MAX_FEE;
 
@@ -394,7 +382,9 @@ mod helpers {
                 config_value!("CHAIN_ID"),
                 encode_message(potential_seq.da_address, BOND_AMOUNT),
             )),
-            TxStatus::BadSerialization => RawTx::new(vec![1, 2, 3]),
+            TxStatus::BadSerialization => <IntegTestRuntime<S> as Runtime<S>>::Auth::encode_with_standard_auth(RawTx {
+                data: vec![1, 2, 3],
+            }),
             TxStatus::OutOfGas => encode_tx(create_tx_out_of_gas(
                 0,
                 max_priority_fee_bips,
@@ -432,13 +422,15 @@ mod helpers {
         )
     }
 
-    fn encode_tx(tx: Transaction<IntegTestRuntime<S>, S>) -> RawTx {
+    fn encode_tx(tx: Transaction<IntegTestRuntime<S>, S>) -> FullyBakedTx {
         let tx_data = borsh::to_vec(&tx).unwrap();
-        RawTx { data: tx_data }
+        <IntegTestRuntime<S> as Runtime<S>>::Auth::encode_with_standard_auth(RawTx {
+            data: tx_data,
+        })
     }
 
     pub(crate) fn make_blob(
-        raw_tx: RawTx,
+        raw_tx: FullyBakedTx,
         da_address: <<S as Spec>::Da as DaSpec>::Address,
     ) -> MockBlob {
         let tx_blob = borsh::to_vec(&raw_tx).unwrap();

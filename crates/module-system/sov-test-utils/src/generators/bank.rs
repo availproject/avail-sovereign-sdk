@@ -75,10 +75,7 @@ where
     pub fn random_create_token_generator(
         private_key: <<S as Spec>::CryptoSpec as CryptoSpec>::PrivateKey,
     ) -> Self {
-        let minter: S::Address = private_key
-            .pub_key()
-            .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>()
-            .into();
+        let minter: S::Address = private_key.pub_key().credential_id().into();
 
         Self::generate_create_token(
             DEFAULT_TOKEN_NAME.to_owned(),
@@ -119,10 +116,7 @@ where
                 token_name,
                 token_decimals: decimals,
                 initial_balance,
-                mint_to_address: minter_pkey
-                    .pub_key()
-                    .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>()
-                    .into(),
+                mint_to_address: minter_pkey.pub_key().credential_id().into(),
                 minter_pkey,
                 admins,
                 supply_cap: u128::MAX,
@@ -136,10 +130,7 @@ where
         let mut transfer_txs = vec![];
         for _ in 1..(n + 1) {
             let priv_key = PrivateKey::<S>::generate();
-            let address: <S as Spec>::Address = priv_key
-                .pub_key()
-                .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>()
-                .into();
+            let address: <S as Spec>::Address = priv_key.pub_key().credential_id().into();
 
             transfer_txs.push(TransferData {
                 sender_pkey: Rc::new(sender_pk.clone()),
@@ -159,10 +150,7 @@ where
     pub fn with_minter_and_transfer(
         minter_key: <<S as Spec>::CryptoSpec as CryptoSpec>::PrivateKey,
     ) -> Self {
-        let minter: <S as Spec>::Address = minter_key
-            .pub_key()
-            .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>()
-            .into();
+        let minter: <S as Spec>::Address = minter_key.pub_key().credential_id().into();
 
         let token_name = DEFAULT_TOKEN_NAME.to_owned();
         let create_data = TokenCreateData {
@@ -189,10 +177,7 @@ where
 
     /// Generates single [`CallMessage::CreateToken`] transaction with a specified minter.
     pub fn with_minter(minter_key: <<S as Spec>::CryptoSpec as CryptoSpec>::PrivateKey) -> Self {
-        let minter: <S as Spec>::Address = minter_key
-            .pub_key()
-            .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>()
-            .into();
+        let minter: <S as Spec>::Address = minter_key.pub_key().credential_id().into();
         Self::generate_create_token(
             DEFAULT_TOKEN_NAME.to_owned(),
             None,
@@ -210,10 +195,7 @@ impl BankMessageGenerator<TestSpec> {
     pub fn create_invalid_transfer(
         minter_key: <<TestSpec as Spec>::CryptoSpec as CryptoSpec>::PrivateKey,
     ) -> Self {
-        let minter: <TestSpec as Spec>::Address = minter_key
-            .pub_key()
-            .credential_id::<<<TestSpec as Spec>::CryptoSpec as CryptoSpec>::Hasher>()
-            .into();
+        let minter: <TestSpec as Spec>::Address = minter_key.pub_key().credential_id().into();
         let token_name = DEFAULT_TOKEN_NAME.to_owned();
         let token_create_data = TokenCreateData {
             token_name: token_name.clone(),

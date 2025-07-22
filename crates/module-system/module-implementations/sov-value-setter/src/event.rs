@@ -13,4 +13,10 @@
 pub enum Event {
     /// New Value event
     NewValue(u32),
+    /// CPU Heavy Operation event
+    RanCPUHeavyOperation(u64, Vec<u8>),
+    /// Read and set many individual values event
+    ReadAndSetManyIndividualValues(u64),
+    /// Read and set heavy state event
+    ReadAndSetHeavyState(u64, u64),
 }

@@ -14,12 +14,12 @@ use sov_state::User;
 /// A module responsible for managing transaction deduplication for the rollup.
 /// Deduplication is done in two ways:
 /// - Nonce deduplication: Each transaction sent by a given `sov_rollup_interface::crypto::CredentialId` has a unique nonce.
-///     It is not possible to send a transaction with the same nonce twice, and the nonce is incremented by one for each transaction.
+///   It is not possible to send a transaction with the same nonce twice, and the nonce is incremented by one for each transaction.
 ///
 /// - Generation deduplication: Each transaction sent by a given `sov_rollup_interface::crypto::CredentialId` has an associated generation number.
-///     Each generation is mapped to a bucket of transactions that deduplicate transactions by their hash.
-///     Each credential can store at most `MAX_STORED_TX_HASHES_PER_CREDENTIAL` in `PAST_TRANSACTION_GENERATIONS` generations.
-///     When a transaction land with a generation number that is higher than the highest known generation, the buckets older than `new_generation - PAST_TRANSACTION_GENERATIONS` are pruned.
+///   Each generation is mapped to a bucket of transactions that deduplicate transactions by their hash.
+///   Each credential can store at most `MAX_STORED_TX_HASHES_PER_CREDENTIAL` in `PAST_TRANSACTION_GENERATIONS` generations.
+///   When a transaction land with a generation number that is higher than the highest known generation, the buckets older than `new_generation - PAST_TRANSACTION_GENERATIONS` are pruned.
 #[derive(Clone, ModuleInfo, ModuleRestApi)]
 pub struct Uniqueness<S: Spec> {
     /// The ID of the sov-uniqueness module.

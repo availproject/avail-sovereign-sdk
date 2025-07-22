@@ -80,8 +80,7 @@ fn do_max_stored_tx_hashes_per_credential_test() {
     for (i, tx_receipt) in slot.batch_receipts[0].tx_receipts.iter().enumerate() {
         assert!(
             tx_receipt.receipt.is_successful(),
-            "Transaction {} should be successful but failed",
-            i
+            "Transaction {i} should be successful but failed"
         );
     }
 

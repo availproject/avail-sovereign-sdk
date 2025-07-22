@@ -650,6 +650,11 @@ impl<S: Spec> SlotGasMeter<S> {
         }
     }
 
+    /// Get the remaining gas allowed for the preferred sequencer.
+    pub fn remaining_preferred_slot_gas(&self) -> &S::Gas {
+        &self.remaining_preferred_slot_gas
+    }
+
     /// Charge gas.
     ///
     /// # Errors

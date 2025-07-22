@@ -51,7 +51,7 @@ impl<'a, W> Formatter<'a, W> {
     }
 }
 
-impl<'a, W: std::io::Write> std::io::Write for Formatter<'a, W> {
+impl<W: std::io::Write> std::io::Write for Formatter<'_, W> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         self.w.write(buf)
     }
@@ -120,8 +120,8 @@ macro_rules! serialize_primitive {
     }};
 }
 
-impl<'fmt, W: std::io::Write, L: LinkingScheme> TypeVisitor<L, ContainerSerdeMetadata>
-    for EncodeVisitor<'fmt, W>
+impl<W: std::io::Write, L: LinkingScheme> TypeVisitor<L, ContainerSerdeMetadata>
+    for EncodeVisitor<'_, W>
 {
     type Arg = Context<L>;
     type ReturnType = Result<(), EncodeError>;

@@ -3,8 +3,8 @@ use std::time::Duration;
 use clap::Parser;
 use sov_modules_api::prelude::tracing;
 use sov_soak_testing::{
-    run_generator_task, AvailRollupSpec, CelestiaRollupSpec, DemoAvailRT, DemoCelestiaRT,
-    DemoMockRT, MockDemoRollupSpec, TestRT,
+    run_generator_task_for_bank_and_synthetic_load, AvailRollupSpec, CelestiaRollupSpec,
+    DemoAvailRT, DemoCelestiaRT, DemoMockRT, MockDemoRollupSpec, TestRT, TxType, ValidityProfile,
 };
 use sov_test_utils::TestSpec;
 use tokio::signal::unix::SignalKind;
@@ -20,7 +20,7 @@ enum SelectedRuntime {
     /// demo-stf with Mock DA
     DemoMock,
     /// demo-stf with Avail DA
-    DemoAvailRT,
+    DemoAvail,
 }
 
 #[derive(Parser)]
@@ -33,13 +33,21 @@ struct Args {
     /// The number of workers to spawn - this controls the number of concurrent transactions. Defaults to 5.
     num_workers: u32,
 
-    #[arg(short, long, default_value = "Runtime::Test")]
+    #[arg(short, long, default_value = "test")]
     runtime: SelectedRuntime,
 
     #[arg(short, long, default_value = "0")]
     /// The salt to use for RNG. Use this value if you're restarting the generator and want to ensure that the generated
     /// transactions don't overlap with the previous run.
     salt: u32,
+
+    #[arg(short, long, default_value = "buzzy")]
+    /// The distribution of valid/invalid transactions to generate.
+    validity_profile: ValidityProfile,
+
+    #[arg(short, long, default_value = "mixed")]
+    /// The distribution of token transfers vs. synthetic load transactions to generate.
+    tx_type: TxType,
 }
 
 async fn worker_task(
@@ -48,27 +56,55 @@ async fn worker_task(
     worker_id: u128,
     num_workers: u32,
     runtime: SelectedRuntime,
+    validity_profile: ValidityProfile,
+    tx_type: TxType,
 ) -> anyhow::Result<()> {
+    let validity = validity_profile.get_validity();
+
     let result = match runtime {
         SelectedRuntime::Test => {
-            run_generator_task::<TestRT, TestSpec>(client, rx, worker_id, num_workers).await
-        }
-        SelectedRuntime::DemoAvailRT => {
-            run_generator_task::<DemoAvailRT, AvailRollupSpec>(client, rx, worker_id, num_workers)
-                .await
-        }
-        SelectedRuntime::DemoCelestia => {
-            run_generator_task::<DemoCelestiaRT, CelestiaRollupSpec>(
+            run_generator_task_for_bank_and_synthetic_load::<TestRT, TestSpec>(
                 client,
                 rx,
                 worker_id,
                 num_workers,
+                validity,
+                tx_type,
+            )
+            .await
+        }
+        SelectedRuntime::DemoAvail => {
+            run_generator_task_for_bank_and_synthetic_load::<DemoAvailRT, AvailRollupSpec>(
+                client,
+                rx,
+                worker_id,
+                num_workers,
+                validity,
+                tx_type,
+            )
+            .await
+        }
+        SelectedRuntime::DemoCelestia => {
+            run_generator_task_for_bank_and_synthetic_load::<DemoCelestiaRT, CelestiaRollupSpec>(
+                client,
+                rx,
+                worker_id,
+                num_workers,
+                validity,
+                tx_type,
             )
             .await
         }
         SelectedRuntime::DemoMock => {
-            run_generator_task::<DemoMockRT, MockDemoRollupSpec>(client, rx, worker_id, num_workers)
-                .await
+            run_generator_task_for_bank_and_synthetic_load::<DemoMockRT, MockDemoRollupSpec>(
+                client,
+                rx,
+                worker_id,
+                num_workers,
+                validity,
+                tx_type,
+            )
+            .await
         }
     };
 
@@ -99,6 +135,8 @@ async fn main() -> Result<(), anyhow::Error> {
             (i + args.salt) as u128,
             args.num_workers,
             args.runtime,
+            args.validity_profile,
+            args.tx_type,
         ));
     }
 

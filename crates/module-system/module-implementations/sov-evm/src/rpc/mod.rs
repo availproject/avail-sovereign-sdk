@@ -3,6 +3,7 @@ use std::convert::Infallible;
 use alloy_primitives::TxKind;
 use error::ensure_success;
 use jsonrpsee::core::RpcResult;
+use jsonrpsee::types::{ErrorObject, ErrorObjectOwned};
 use reth_primitives::revm_primitives::{
     Address, AnalysisKind, BlockEnv, CfgEnv, CfgEnvWithHandlerCfg, EVMError, ExecutionResult,
     HaltReason, InvalidHeader, InvalidTransaction, TransactTo, TxEnv, B256, KECCAK_EMPTY, U256,
@@ -288,12 +289,12 @@ where
             let tx = self
                 .transactions
                 .get(number, state)
-            .unwrap_infallible()
+                .unwrap_infallible()
                 .unwrap_or_else(|| panic!("Transaction with known hash {} and number {} must be set in all {} transaction",
                                           hash,
                                           number,
-                                          self.transactions.len( state).unwrap_infallible()
-                                        ));
+                                          self.transactions.len(state).unwrap_infallible()
+                ));
 
             let block = self
                 .blocks
@@ -398,10 +399,10 @@ where
 
         let result = match executor::inspect(evm_db, &block_env, tx_env, cfg_env) {
             Ok(result) => result.result,
-            Err(err) => return Err(eth_from_infallible(err).into()),
+            Err(err) => return Err(eth_api_into_rpc_error(eth_from_infallible(err))),
         };
 
-        Ok(ensure_success(result)?)
+        ensure_success(result).map_err(eth_api_into_rpc_error)
     }
 
     /// Handler for: `eth_blockNumber`
@@ -474,11 +475,13 @@ where
                     .map(|account| account.info)
                     .unwrap_or_default();
                 if KECCAK_EMPTY == to_account.code_hash {
-                    // simple transfer, check if caller has sufficient funds
+                    // simple transfer, check if the caller has sufficient funds
                     let available_funds = account.balance;
 
                     if tx_env.value > available_funds {
-                        return Err(RpcInvalidTransactionError::InsufficientFundsForTransfer.into());
+                        return Err(invalid_tx_into_rpc_error(
+                            RpcInvalidTransactionError::InsufficientFundsForTransfer,
+                        ));
                     }
                     return Ok(U64::from(MIN_TRANSACTION_GAS));
                 }
@@ -496,7 +499,7 @@ where
             }
         }
 
-        // if the provided gas limit is less than computed cap, use that
+        // if the provided gas limit is less than the computed cap, use that
         block_env.gas_limit = std::cmp::min(U256::from(tx_env.gas_limit), highest_gas_limit);
         trace!(?block_env, "Block env is configured");
 
@@ -518,9 +521,12 @@ where
             // again with the block's gas limit to check if revert is gas related or not
             if request_gas.is_some() || request_gas_price.is_some() {
                 let evm_db = self.get_db(state);
-                return Err(
-                    map_out_of_gas_err(block_env, tx_env, cfg_env_with_handler, evm_db).into(),
-                );
+                return Err(eth_api_into_rpc_error(map_out_of_gas_err(
+                    block_env,
+                    tx_env,
+                    cfg_env_with_handler,
+                    evm_db,
+                )));
             }
         }
 
@@ -528,7 +534,9 @@ where
             Ok(result) => match result.result {
                 ExecutionResult::Success { .. } => result.result,
                 ExecutionResult::Halt { reason, gas_used } => {
-                    return Err(RpcInvalidTransactionError::halt(reason, gas_used).into())
+                    return Err(invalid_tx_into_rpc_error(RpcInvalidTransactionError::halt(
+                        reason, gas_used,
+                    )))
                 }
                 ExecutionResult::Revert { output, .. } => {
                     // if price or limit was included in the request,
@@ -536,17 +544,21 @@ where
                     // again with the block's gas limit to check if revert is gas related or not
                     return if request_gas.is_some() || request_gas_price.is_some() {
                         let evm_db = self.get_db(state);
-                        Err(
-                            map_out_of_gas_err(block_env, tx_env, cfg_env_with_handler, evm_db)
-                                .into(),
-                        )
+                        Err(eth_api_into_rpc_error(map_out_of_gas_err(
+                            block_env,
+                            tx_env,
+                            cfg_env_with_handler,
+                            evm_db,
+                        )))
                     } else {
                         // the transaction did revert
-                        Err(RpcInvalidTransactionError::Revert(RevertError::new(output)).into())
+                        Err(invalid_tx_into_rpc_error(
+                            RpcInvalidTransactionError::Revert(RevertError::new(output)),
+                        ))
                     };
                 }
             },
-            Err(err) => return Err(eth_from_infallible(err).into()),
+            Err(err) => return Err(eth_api_into_rpc_error(eth_from_infallible(err))),
         };
 
         // at this point, we know the call succeeded but want to find the _best_ (lowest) gas the
@@ -612,13 +624,15 @@ where
                             err => {
                                 // these should be unreachable because we know the transaction succeeds,
                                 // but we consider these cases an error
-                                return Err(RpcInvalidTransactionError::EvmHalt(err).into());
+                                return Err(invalid_tx_into_rpc_error(
+                                    RpcInvalidTransactionError::EvmHalt(err),
+                                ));
                             }
                         }
                     }
                 },
                 Err(err) => {
-                    return Err(eth_from_infallible(err).into());
+                    return Err(eth_api_into_rpc_error(eth_from_infallible(err)));
                 }
             };
 
@@ -784,4 +798,14 @@ fn eth_from_infallible(err: EVMError<Infallible>) -> EthApiError {
         EVMError::Custom(data) => EthApiError::EvmCustom(data),
         EVMError::Precompile(data) => EthApiError::EvmPrecompile(data),
     }
+}
+
+/// Hack while reth is not upgraded for `jsonrpsee` 0.25
+pub fn eth_api_into_rpc_error(eth_error: EthApiError) -> ErrorObjectOwned {
+    ErrorObject::owned(500, format!("Eth Error: {eth_error:?}"), None::<()>)
+}
+
+/// Hack while reth is not upgraded for `jsonrpsee` 0.25
+pub fn invalid_tx_into_rpc_error(rpc: RpcInvalidTransactionError) -> ErrorObjectOwned {
+    eth_api_into_rpc_error(rpc.into())
 }

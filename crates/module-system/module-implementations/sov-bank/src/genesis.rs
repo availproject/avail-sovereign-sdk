@@ -75,7 +75,7 @@ impl<S: Spec> core::fmt::Display for GasTokenConfig<S> {
         let address_and_balances = self
             .address_and_balances
             .iter()
-            .map(|(address, balance)| format!("({}, {})", address, balance))
+            .map(|(address, balance)| format!("({address}, {balance})"))
             .collect::<Vec<String>>()
             .join(", ");
 

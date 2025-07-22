@@ -45,7 +45,13 @@ fn test_outcomes(outcomes: Vec<Arc<TransactionOutcome>>, txs_count: usize) {
             ValueSetterDiscriminants::SetValue,
             ValueSetterDiscriminants::SetManyValues,
         ]),
-        1000,
+        sov_transaction_generator::generators::value_setter::ValueSetterGeneratorOptions {
+            maximum_vec_length: 1000,
+            min_and_max_number_of_individual_state_operations: (0, 0),
+            min_and_max_number_of_new_values_for_heavy_state: (0, 0),
+            min_and_max_number_of_iterations_for_cpu_heavy_operation: (0, 0),
+            max_heavy_state_size: 0,
+        },
         user.private_key.clone(),
     ));
     let modules: Vec<BasicModuleRef<S, RT>> =

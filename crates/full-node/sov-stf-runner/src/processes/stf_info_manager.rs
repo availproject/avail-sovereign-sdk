@@ -161,7 +161,6 @@ impl<
 }
 
 /// Receives notifications from the associated [`Sender`] and reads STF info data from the db.
-
 pub struct Receiver<StateRoot, Witness, Da: DaSpec> {
     /// Height of the next `StateTransitionInfo` that is expected to be processed by the `Receiver`
     next_height_to_receive: Arc<AtomicU64>,
@@ -344,9 +343,7 @@ where
 
         assert!(
             next_rollup_height_to_receive <= write_rollup_height,
-            "write({}) is smaller than next height to receive({})",
-            write_rollup_height,
-            next_rollup_height_to_receive
+            "write({write_rollup_height}) is smaller than next height to receive({next_rollup_height_to_receive})"
         );
 
         tracing::trace!(
@@ -384,8 +381,8 @@ where
             // ensure we don't see the same height multiple times.
             if slot_number >= next_height_to_receive {
                 let stf_info = self.get(slot_number)?.unwrap_or_else(|| {
-                    panic!("The `stf-info-manager` sender notified that the stf height {} is available but the transition is missing from ledger DB.
-                    Please ensure that the `stf-info-manager` only notifies for heights up to `write_rollup_height`. This is a bug. Please report it", slot_number)
+                    panic!("The `stf-info-manager` sender notified that the stf height {slot_number} is available but the transition is missing from ledger DB.
+                    Please ensure that the `stf-info-manager` only notifies for heights up to `write_rollup_height`. This is a bug. Please report it")
                 });
 
                 return Ok(Some(stf_info));

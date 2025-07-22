@@ -186,7 +186,7 @@ fn test_registration_not_enough_funds() {
                     "Transaction reverted, but with unexpected reason"
                 );
             }
-            unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+            unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
         }),
     });
 }
@@ -230,7 +230,7 @@ fn test_registration_second_time() {
                     "Transaction reverted, but with unexpected reason"
                 );
             }
-            unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+            unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
         }),
     });
 }
@@ -491,7 +491,7 @@ fn cannot_exit_with_own_batch() {
                     "Transaction reverted, but with unexpected reason"
                 );
             }
-            unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+            unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
         }),
     });
 }
@@ -549,7 +549,7 @@ fn test_exit_different_sender_fails() {
                     "Transaction reverted, but with unexpected reason"
                 );
             }
-            unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+            unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
         }),
     });
 
@@ -586,7 +586,7 @@ fn test_exit_different_sender_fails() {
                     "Transaction reverted, but with unexpected reason"
                 );
             }
-            unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+            unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
         }),
     });
 }
@@ -706,7 +706,7 @@ fn test_balance_increase_fails_if_insufficient_funds() {
                     "Transaction reverted, but with unexpected reason"
                 );
             }
-            unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+            unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
         }),
     });
 }
@@ -773,7 +773,7 @@ fn test_balance_increase_fails_for_unknown_sequencer() {
                     "Transaction reverted, but with unexpected reason"
                 );
             }
-            unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+            unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
         }),
     });
 }

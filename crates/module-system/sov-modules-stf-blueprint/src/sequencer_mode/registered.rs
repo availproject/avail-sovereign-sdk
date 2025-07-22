@@ -399,12 +399,13 @@ where
 
         let provisional_outcome = match outcome {
             AuthAndProcessOutcome::IllegalSequencer { reason } => {
-                tracing::warn!("Transaction could not be attempted due to sequencer error. If this error persists, check that your sequencer has sufficient funds. Error: {}", reason);
+                tracing::warn!(%reason, "Transaction could not be attempted due to sequencer error. If this error persists, check that your sequencer has sufficient funds");
                 ProvisionalSequencerOutcome::out_of_funds(
                     // SAFETY: `gas_used` is either Zero or comes from `BasicGasMeter`, which ensures overflow protection.
                     gas_used
                         .checked_value(gas_price)
                         .expect("gas_used value overflowed"),
+                    reason,
                 )
             }
             AuthAndProcessOutcome::Skipped { error, tx_hash } => {
@@ -433,8 +434,12 @@ where
 
         let provisional_reward = provisional_outcome.reward;
         let provisional_penalty = provisional_outcome.penalty;
-        let (mut new_checkpoint, outcome) =
-            injected_control_flow.post_tx(provisional_outcome, dirty_scratchpad);
+        let (mut new_checkpoint, outcome) = injected_control_flow.post_tx(
+            provisional_outcome,
+            dirty_scratchpad,
+            slot_gas_meter,
+            &gas_used,
+        );
         match outcome {
             TxControlFlow::ContinueProcessing(receipt) => {
                 new_checkpoint.commit_revertable_storage_cache();
@@ -537,7 +542,7 @@ where
 
 enum AuthAndProcessOutcome<S: Spec> {
     /// The sequencer was not allowed to process this transaction
-    IllegalSequencer { reason: String },
+    IllegalSequencer { reason: OutOfFundsReason<S> },
     /// The transaction failed before execution started
     Skipped {
         error: TxProcessingError,
@@ -607,8 +612,7 @@ where
         None => {
             return AuthAndProcessOutput {
                 outcome: AuthAndProcessOutcome::IllegalSequencer {
-                    reason: "Overflow: Unable to calculate gas value for max_tx_check_costs"
-                        .to_string(),
+                    reason: OutOfFundsReason::TxGasOverflow,
                 },
                 scratchpad,
                 gas_used: <S as Spec>::Gas::zero(),
@@ -619,11 +623,10 @@ where
     if sequencer_bond.amount() < max_tx_check_value {
         return AuthAndProcessOutput {
             outcome: AuthAndProcessOutcome::IllegalSequencer {
-                reason: format!(
-                    "The sequencer did not have sufficient funds to cover tx authentication checks, sequencer bond is {}, but the cost of checking the transaction is {}",
-                    sequencer_bond.amount(),
-                    max_tx_check_value
-                ),
+                reason: OutOfFundsReason::SequencerBondTooLow {
+                    sequencer_bond: sequencer_bond.amount(),
+                    max_tx_check_value,
+                },
             },
             scratchpad,
             gas_used: <S as Spec>::Gas::zero(),
@@ -634,7 +637,10 @@ where
     if slot_gas.dim_is_less_or_eq(&max_tx_check_costs) {
         return AuthAndProcessOutput {
             outcome: AuthAndProcessOutcome::IllegalSequencer {
-                reason: "The slot gas limit has been exhausted".to_string(),
+                reason: OutOfFundsReason::SlotGasLimitExhausted {
+                    max_tx_check_gas: max_tx_check_costs,
+                    remaining_slot_gas: slot_gas.clone(),
+                },
             },
             scratchpad,
             gas_used: <S as Spec>::Gas::zero(),
@@ -698,7 +704,7 @@ where
                         scratchpad,
                         gas_used: gas_used_for_authentication,
                         outcome: AuthAndProcessOutcome::IllegalSequencer {
-                            reason: format!("The sequencer did not have sufficient funds to cover tx authentication: {}", e),
+                            reason: OutOfFundsReason::SequencerOutOfGasForAuthentication(e),
                         },
                     }
                 }

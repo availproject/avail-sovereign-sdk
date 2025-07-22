@@ -46,6 +46,13 @@ pub enum CallMessage<S: Spec> {
         /// The expected visible slot number.
         expected_visible_slot_number: u64,
     },
+    /// SetValue and sleep for a while.
+    SetValueAndSleep {
+        /// Singe new value.
+        value: u32,
+        /// The number of milliseconds to sleep.
+        sleep_millis: u64,
+    },
     /// Trigger a panic.
     Panic,
 }
@@ -92,6 +99,19 @@ impl<S: Spec> ValueSetter<S> {
 
         self.emit_event(state, Event::NewValue(new_value));
 
+        Ok(())
+    }
+
+    /// Sets `value` field to the `new_value`, only admin is authorized to call this method.
+    pub(crate) fn set_value_and_sleep(
+        &mut self,
+        new_value: u32,
+        sleep_millis: u64,
+        context: &Context<S>,
+        state: &mut impl TxState<S>,
+    ) -> Result<()> {
+        self.set_value(new_value, None, context, state)?;
+        std::thread::sleep(std::time::Duration::from_millis(sleep_millis));
         Ok(())
     }
 

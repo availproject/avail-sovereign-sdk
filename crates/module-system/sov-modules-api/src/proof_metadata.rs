@@ -36,7 +36,6 @@ pub enum ProofType {
     feature = "native",
     derive(borsh::BorshSerialize, serde::Serialize, serde::Deserialize,)
 )]
-
 pub struct SerializeProofWithDetails<S: Spec> {
     /// The serialized aggregated proof.
     pub proof: ProofType,

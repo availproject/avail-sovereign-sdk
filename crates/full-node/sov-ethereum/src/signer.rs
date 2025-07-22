@@ -3,7 +3,7 @@ use jsonrpsee::RpcModule;
 use reth_primitives::{TxKind, U256};
 use reth_rpc_eth_types::EthApiError;
 use sov_address::{EthereumAddress, FromVmAddress};
-use sov_evm::{EthereumAuthenticator, Evm, RlpEvmTransaction};
+use sov_evm::{eth_api_into_rpc_error, EthereumAuthenticator, Evm, RlpEvmTransaction};
 use sov_modules_api::capabilities::HasKernel;
 use sov_modules_api::macros::config_value;
 use sov_modules_api::{ApiStateAccessor, RawTx, Spec};
@@ -216,7 +216,9 @@ where
         }
         // EIP-4844
         (None, _, _, Some(_), Some(_), Some(_)) => {
-            return Err(EthApiError::Unsupported("EIP-4844 is not supported").into())
+            return Err(eth_api_into_rpc_error(EthApiError::Unsupported(
+                "EIP-4844 is not supported",
+            )))
         }
         _ => None,
     };
@@ -244,8 +246,14 @@ where
             reth_rpc_types::TypedTransactionRequest::EIP1559(m)
         }
         Some(reth_rpc_types::TypedTransactionRequest::EIP4844(_)) => {
-            return Err(EthApiError::Unsupported("EIP-4844 is not supported").into())
+            return Err(sov_evm::eth_api_into_rpc_error(EthApiError::Unsupported(
+                "EIP-4844 is not supported",
+            )))
         }
-        None => return Err(EthApiError::ConflictingFeeFieldsInRequest.into()),
+        None => {
+            return Err(sov_evm::eth_api_into_rpc_error(
+                EthApiError::ConflictingFeeFieldsInRequest,
+            ))
+        }
     })
 }

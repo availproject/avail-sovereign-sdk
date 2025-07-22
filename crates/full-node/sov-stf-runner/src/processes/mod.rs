@@ -3,7 +3,6 @@ mod op_manager;
 mod prover_service;
 mod stf_info_manager;
 mod zk_manager;
-
 use std::num::NonZero;
 
 use op_manager::attestations::AttestationsManager;
@@ -64,6 +63,10 @@ where
 }
 
 /// Starts the operator workflow in the background.
-pub async fn start_operator_workflow_in_background() -> JoinHandle<()> {
-    todo!("Operator mode not implemented yet")
+pub async fn start_operator_workflow_in_background(
+    mut shutdown_receiver: watch::Receiver<()>,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        let _ = shutdown_receiver.changed().await;
+    })
 }

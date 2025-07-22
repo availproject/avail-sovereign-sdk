@@ -81,6 +81,37 @@
       "additionalProperties": false
     },
     {
+      "description": "SetValue and sleep for a while.",
+      "type": "object",
+      "required": [
+        "set_value_and_sleep"
+      ],
+      "properties": {
+        "set_value_and_sleep": {
+          "type": "object",
+          "required": [
+            "sleep_millis",
+            "value"
+          ],
+          "properties": {
+            "sleep_millis": {
+              "description": "The number of milliseconds to sleep.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "value": {
+              "description": "Singe new value.",
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
       "description": "Trigger a panic.",
       "type": "string",
       "enum": [

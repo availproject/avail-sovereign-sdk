@@ -117,8 +117,7 @@ fn bench_read(
     let (stf_storage, _) = storage_manager.create_state_for(&block).unwrap();
 
     let random_id = format!(
-        "random/new_writes={}/old_writes={}/fork_len={}/height=",
-        num_new_writes, num_old_writes, fork_len,
+        "random/new_writes={num_new_writes}/old_writes={num_old_writes}/fork_len={fork_len}/height=",
     );
     let random_key_hash = KeyHash::with::<sha2::Sha256>(&random_key);
     let random_read_input = &(stf_storage.clone(), random_key_hash);
@@ -138,8 +137,7 @@ fn bench_read(
     );
 
     let non_existing_id = format!(
-        "non_existing/new_writes={}/old_writes={}/fork_len={}/height=",
-        num_new_writes, num_old_writes, fork_len,
+        "non_existing/new_writes={num_new_writes}/old_writes={num_old_writes}/fork_len={fork_len}/height=",
     );
     let non_existing_key_hash = KeyHash::with::<sha2::Sha256>(&non_existing_key);
     let non_existing_input = &(stf_storage, non_existing_key_hash);
