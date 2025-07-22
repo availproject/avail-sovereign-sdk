@@ -85,7 +85,7 @@ fn mint_token_fails_if_user_unauthorized() {
                 let message_1 = chain.next().unwrap().to_string();
                 let message_2 = chain.next().unwrap().to_string();
                 assert!(chain.next().is_none());
-                assert_eq!(message_1, format!("Failed to mint token_id={}", token_id));
+                assert_eq!(message_1, format!("Failed to mint token_id={token_id}"));
                 assert_eq!(
                     message_2,
                     format!(
@@ -140,7 +140,7 @@ fn try_create_token_and_mint_should_fail_if_not_authorized() {
                 let message_1 = chain.next().unwrap().to_string();
                 let message_2 = chain.next().unwrap().to_string();
                 assert!(chain.next().is_none());
-                assert_eq!(message_1, format!("Failed to mint token_id={}", token_id));
+                assert_eq!(message_1, format!("Failed to mint token_id={token_id}"));
                 assert_eq!(
                     message_2,
                     format!(
@@ -180,7 +180,7 @@ fn mint_token_account_balance_overflow() {
                 let message_1 = chain.next().unwrap().to_string();
                 let message_2 = chain.next().unwrap().to_string();
                 assert!(chain.next().is_none());
-                assert_eq!(message_1, format!("Failed to mint token_id={}", token_id));
+                assert_eq!(message_1, format!("Failed to mint token_id={token_id}"));
                 assert_eq!(
                     message_2,
                     "Total Supply overflow in the mint method of bank module",
@@ -225,7 +225,7 @@ fn mint_token_total_supply_overflow() {
                 let message_1 = chain.next().unwrap().to_string();
                 let message_2 = chain.next().unwrap().to_string();
                 assert!(chain.next().is_none());
-                assert_eq!(message_1, format!("Failed to mint token_id={}", token_id));
+                assert_eq!(message_1, format!("Failed to mint token_id={token_id}"));
                 assert_eq!(
                     message_2,
                     "Total Supply overflow in the mint method of bank module",
@@ -263,7 +263,7 @@ fn test_mint_token_fails_if_token_doesnt_exist() {
                 let message_1 = chain.next().unwrap().to_string();
                 assert_eq!(
                     message_1,
-                    format!("Failed to get token_id={}", invalid_token_id)
+                    format!("Failed to get token_id={invalid_token_id}")
                 );
             } else {
                 panic!("The transaction should have failed");
@@ -305,10 +305,10 @@ fn test_mint_token_fails_if_token_is_frozen() {
                     let mut chain = err.chain();
                     let message_1 = chain.next().unwrap().to_string();
                     let message_2 = chain.next().unwrap().to_string();
-                    assert_eq!(message_1, format!("Failed to mint token_id={}", token_id));
+                    assert_eq!(message_1, format!("Failed to mint token_id={token_id}"));
                     assert_eq!(
                         message_2,
-                        format!("Attempt to mint frozen token {}", token_name)
+                        format!("Attempt to mint frozen token {token_name}")
                     );
                 } else {
                     panic!("The transaction should have failed");

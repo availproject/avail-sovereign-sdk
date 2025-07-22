@@ -4,7 +4,7 @@ description = "Defines traits and types for state storage in the Sovereign SDK m
 authors = { workspace = true }
 edition = { workspace = true }
 homepage = { workspace = true }
-license = { workspace = true }
+license = "Sovereign Labs Community Software License"
 repository = { workspace = true }
 
 version = { workspace = true }
@@ -41,11 +41,12 @@ sha2 = { workspace = true }
 
 [features]
 arbitrary = [
-    "dep:arbitrary",
-    "dep:proptest",
-    "dep:proptest-derive",
-    "sov-db?/arbitrary",
-    "sov-rollup-interface/arbitrary",
+	"dep:arbitrary",
+	"dep:proptest",
+	"dep:proptest-derive",
+	"sov-db?/arbitrary",
+	"sov-rollup-interface/arbitrary",
+	"sov-modules-macros?/arbitrary"
 ]
 bench = ["sov-metrics", "sov-modules-macros/bench"]
 default = []

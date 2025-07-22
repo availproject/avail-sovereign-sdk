@@ -15,7 +15,7 @@ pub struct BootstrapWorkingSet<'a, S: Spec> {
     pub(super) inner: &'a mut Delta<S::Storage>,
 }
 
-impl<'a, S: Spec> UniversalStateAccessor for BootstrapWorkingSet<'a, S> {
+impl<S: Spec> UniversalStateAccessor for BootstrapWorkingSet<'_, S> {
     fn get_size(&mut self, namespace: Namespace, key: &SlotKey) -> Option<u32> {
         self.inner.get_size(namespace, key)
     }
@@ -33,7 +33,7 @@ impl<'a, S: Spec> UniversalStateAccessor for BootstrapWorkingSet<'a, S> {
     }
 }
 
-impl<'a, S: Spec> GasMeter for BootstrapWorkingSet<'a, S> {
+impl<S: Spec> GasMeter for BootstrapWorkingSet<'_, S> {
     type Spec = S;
 }
 
@@ -49,11 +49,11 @@ pub struct KernelStateAccessor<'a, S: Spec> {
     pub(crate) true_slot_num: SlotNumber,
 }
 
-impl<'a, S: Spec> GasMeter for KernelStateAccessor<'a, S> {
+impl<S: Spec> GasMeter for KernelStateAccessor<'_, S> {
     type Spec = S;
 }
 
-impl<'a, S: Spec> VersionReader for KernelStateAccessor<'a, S> {
+impl<S: Spec> VersionReader for KernelStateAccessor<'_, S> {
     fn current_visible_slot_number(&self) -> VisibleSlotNumber {
         self.checkpoint.current_visible_slot_number()
     }
@@ -67,13 +67,13 @@ impl<'a, S: Spec> VersionReader for KernelStateAccessor<'a, S> {
     }
 }
 
-impl<'a, S: Spec> PrivilegedKernelAccessor for KernelStateAccessor<'a, S> {
+impl<S: Spec> PrivilegedKernelAccessor for KernelStateAccessor<'_, S> {
     fn true_slot_number(&self) -> SlotNumber {
         self.true_slot_num
     }
 }
 
-impl<'a, S: Spec> AccessoryStateWriter for KernelStateAccessor<'a, S> {}
+impl<S: Spec> AccessoryStateWriter for KernelStateAccessor<'_, S> {}
 
 impl<'a, S: Spec> KernelStateAccessor<'a, S> {
     /// Instantiates a new [`KernelStateAccessor`].
@@ -94,7 +94,7 @@ impl<'a, S: Spec> KernelStateAccessor<'a, S> {
     }
 }
 
-impl<'a, S: Spec> KernelStateAccessor<'a, S> {
+impl<S: Spec> KernelStateAccessor<'_, S> {
     /// Returns the visible rollup height contained in the accessor
     pub fn visible_slot_number(&self) -> VisibleSlotNumber {
         self.checkpoint.visible_slot_num

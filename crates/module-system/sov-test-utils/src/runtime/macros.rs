@@ -47,6 +47,8 @@ macro_rules! generate_runtime_without_capabilities {
             pub chain_state: $crate::runtime::ChainState<S>,
             /// The blob storage module.
             pub blob_storage: $crate::runtime::BlobStorage<S>,
+            /// The operator incentives module.
+            pub operator_incentives: $crate::runtime::OperatorIncentives<S>,
             /// The prover incentives module.
             pub prover_incentives: $crate::runtime::ProverIncentives<S>,
             $(
@@ -73,14 +75,15 @@ macro_rules! generate_runtime_without_capabilities {
                 $($module_name: <$module_ty as ::sov_modules_api::Genesis>::Config),*
             ) -> Self {
                 Self {
-                    sequencer_registry: minimal_config.sequencer_registry,
-                    bank: minimal_config.bank,
-                    accounts: minimal_config.accounts,
-                    uniqueness: minimal_config.uniqueness,
-                    chain_state: minimal_config.chain_state,
-                    blob_storage: minimal_config.blob_storage,
-                    prover_incentives: minimal_config.prover_incentives,
-                    attester_incentives: minimal_config.attester_incentives,
+                    sequencer_registry: minimal_config.config.sequencer_registry,
+                    bank: minimal_config.config.bank,
+                    accounts: minimal_config.config.accounts,
+                    uniqueness: minimal_config.config.uniqueness,
+                    chain_state: minimal_config.config.chain_state,
+                    blob_storage: minimal_config.config.blob_storage,
+                    operator_incentives : minimal_config.config.operator_incentives,
+                    prover_incentives: minimal_config.config.prover_incentives,
+                    attester_incentives: minimal_config.config.attester_incentives,
                     $(
                         $module_name,
                     )*
@@ -248,6 +251,7 @@ macro_rules! generate_runtime {
                         sequencer_registry: &mut self.sequencer_registry,
                         accounts: &mut self.accounts,
                         uniqueness: &mut self.uniqueness,
+                        operator_incentives: &mut self.operator_incentives,
                         prover_incentives: &mut self.prover_incentives,
                         attester_incentives: &mut self.attester_incentives,
                     }
@@ -296,6 +300,7 @@ macro_rules! generate_runtime {
                         sequencer_registry: &mut self.sequencer_registry,
                         accounts: &mut self.accounts,
                         uniqueness: &mut self.uniqueness,
+                        operator_incentives: &mut self.operator_incentives,
                         prover_incentives: &mut self.prover_incentives,
                         attester_incentives: &mut self.attester_incentives,
                     }
@@ -369,6 +374,36 @@ macro_rules! generate_zk_runtime_with_kernel {
             modules: [$($module_name : $module_ty),*],
             operating_mode: sov_modules_api::runtime::OperatingMode::Zk,
             minimal_genesis_config_type: $crate::runtime::genesis::zk::MinimalZkGenesisConfig<S>,
+            runtime_trait_impl_bounds: [],
+            kernel_type: $kernel_ty,
+            auth_type: sov_modules_api::capabilities::RollupAuthenticator<S, Self>,
+            auth_call_wrapper: |auth_data| auth_data,
+        }
+    };
+}
+
+/// Generates an operator runtime containing the [`Bank`](sov_bank::Bank), [`OperatorIncentives`](sov_operator_incentives::OperatorIncentives),
+/// and [`SequencerRegistry`](sov_sequencer_registry::SequencerRegistry) modules in addition to any provided as arguments. The runtime implements a basic kernel.
+#[macro_export]
+macro_rules! generate_operator_runtime {
+    ($id:ident <= $($module_name:ident : $module_ty:path),*) => {
+        $crate::generate_operator_runtime_with_kernel! {
+            kernel_type: $crate::runtime::BasicKernel<'a, S>,
+            $id <= $($module_name : $module_ty),*
+        }
+    };
+}
+
+/// Generates an operator runtime containing the [`Bank`](sov_bank::Bank), [`OperatorIncentives`](sov_operator_incentives::OperatorIncentives),
+/// and [`SequencerRegistry`](sov_sequencer_registry::SequencerRegistry) modules in addition to any provided as arguments. The runtime implements a custom kernel.
+#[macro_export]
+macro_rules! generate_operator_runtime_with_kernel {
+    (kernel_type: $kernel_ty:ty, $id:ident <= $($module_name:ident : $module_ty:path),*) => {
+        $crate::generate_runtime! {
+            name: $id,
+            modules: [$($module_name : $module_ty),*],
+            operating_mode: sov_modules_api::runtime::OperatingMode::Operator,
+            minimal_genesis_config_type: $crate::runtime::genesis::operator::MinimalOperatorGenesisConfig<S>,
             runtime_trait_impl_bounds: [],
             kernel_type: $kernel_ty,
             auth_type: sov_modules_api::capabilities::RollupAuthenticator<S, Self>,

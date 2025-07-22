@@ -3,8 +3,8 @@ use sov_attester_incentives::AttesterIncentivesConfig;
 use sov_bank::{Bank, BankConfig};
 use sov_modules_api::prelude::UnwrapInfallible;
 use sov_modules_api::{
-    Amount, CodeCommitmentFor, CryptoSpec, DaSpec, EncodeCall, Gas, GasArray, GasSpec, PrivateKey,
-    PublicKey, Spec,
+    Amount, CodeCommitmentFor, DaSpec, EncodeCall, Gas, GasArray, GasSpec, PrivateKey, PublicKey,
+    Spec,
 };
 use sov_modules_stf_blueprint::GenesisParams;
 use sov_paymaster::{PaymasterConfig, SafeVec};
@@ -80,10 +80,7 @@ fn run_value_setter_txs_with_assertions(
 ) {
     let sequencer_rollup_addr = <TestSpec as Spec>::Address::from(SEQUENCER_ADDR);
     let admin_pkey = TestPrivateKey::generate();
-    let admin_addr = admin_pkey
-        .pub_key()
-        .credential_id::<<<TestSpec as Spec>::CryptoSpec as CryptoSpec>::Hasher>()
-        .into();
+    let admin_addr = admin_pkey.pub_key().credential_id().into();
     let genesis_config = create_test_rt_genesis_config(
         admin_addr,
         &[],
@@ -147,6 +144,9 @@ fn create_test_rt_genesis_config<S: Spec>(
             seq_da_address,
             seq_bond,
             is_preferred_sequencer: true,
+        },
+        operator_incentives: sov_operator_incentives::OperatorIncentivesConfig {
+            reward_address: prover_placeholder.address(),
         },
         attester_incentives: AttesterIncentivesConfig {
             minimum_attester_bond: user_stake.clone(),
@@ -235,7 +235,7 @@ fn test_define_token() {
         .add_accounts_with_token(token_0_name, true, 2, Amount::new(100_000))
         .add_accounts_with_token(token_1_name, false, 1, Amount::new(10));
 
-    let admin = genesis_config.additional_accounts[0].clone();
+    let admin = genesis_config.additional_accounts()[0].clone();
 
     let genesis_config = crate::runtime::GenesisConfig::from_minimal_config(
         genesis_config.clone().into(),
@@ -293,7 +293,7 @@ fn test_define_token_with_state() {
         .add_accounts_with_token(token_0_name, false, 2, BALANCE_TOKEN_0)
         .add_accounts_with_token(token_1_name, true, 0, Amount::ZERO);
 
-    let admin = genesis_config.additional_accounts[0].clone();
+    let admin = genesis_config.additional_accounts()[0].clone();
 
     let token_names = genesis_config.token_names();
 
@@ -396,7 +396,7 @@ fn test_define_token_with_mint() {
 
     let minter = token_0_holders.pop().unwrap();
 
-    let admin = genesis_config.additional_accounts[0].clone();
+    let admin = genesis_config.additional_accounts()[0].clone();
 
     let minter_address = minter.as_user().address();
 
@@ -446,15 +446,18 @@ fn test_define_genesis_config_additional_accounts_with_default_balance() {
     let mut genesis_config = HighLevelOptimisticGenesisConfig::<TestSpec>::generate();
 
     // By default we don't have any additional accounts
-    assert!(genesis_config.additional_accounts.is_empty());
+    assert!(genesis_config.additional_accounts().is_empty());
 
     genesis_config = genesis_config.add_accounts_with_default_balance(5);
-    assert_eq!(genesis_config.additional_accounts.len(), 5);
+    assert_eq!(genesis_config.additional_accounts().len(), 5);
 
-    genesis_config.additional_accounts.iter().for_each(|user| {
-        assert_eq!(user.balance(), TEST_DEFAULT_USER_BALANCE);
-        assert_eq!(user.token_balances.len(), 0);
-    });
+    genesis_config
+        .additional_accounts()
+        .iter()
+        .for_each(|user| {
+            assert_eq!(user.balance(), TEST_DEFAULT_USER_BALANCE);
+            assert_eq!(user.token_balances.len(), 0);
+        });
 }
 
 #[test]
@@ -462,7 +465,7 @@ fn test_define_genesis_config_additional_accounts_test_user() {
     let mut genesis_config = HighLevelOptimisticGenesisConfig::<TestSpec>::generate();
 
     // By default we don't have any additional accounts
-    assert!(genesis_config.additional_accounts.is_empty());
+    assert!(genesis_config.additional_accounts().is_empty());
 
     let balance_1 = Amount::new(100);
     let balance_2 = Amount::new(1);
@@ -474,10 +477,10 @@ fn test_define_genesis_config_additional_accounts_test_user() {
             is_minter: false,
         }),
     ]);
-    assert_eq!(genesis_config.additional_accounts.len(), 2);
+    assert_eq!(genesis_config.additional_accounts().len(), 2);
 
-    let first_user = genesis_config.additional_accounts.first().unwrap();
-    let second_user = genesis_config.additional_accounts.get(1).unwrap();
+    let first_user = genesis_config.additional_accounts().first().unwrap();
+    let second_user = genesis_config.additional_accounts().get(1).unwrap();
 
     assert_eq!(first_user.balance(), balance_1);
     assert_eq!(first_user.token_balances.len(), 0);

@@ -95,7 +95,7 @@ impl<N: Namespace> KeyEncoder<JmtNodes<N>> for NodeKey {
     fn encode_key(&self) -> Result<Vec<u8>, CodecError> {
         // 8 bytes for version, 4 each for the num_nibbles and bytes.len() fields, plus 1 byte per byte of nibllepath
         let mut output =
-            Vec::with_capacity(8 + 4 + 4 + ((self.nibble_path().num_nibbles() + 1) / 2));
+            Vec::with_capacity(8 + 4 + 4 + self.nibble_path().num_nibbles().div_ceil(2));
         let version = self.version().to_be_bytes();
         output.extend_from_slice(&version);
         BorshSerialize::serialize(&self.nibble_path(), &mut output)?;

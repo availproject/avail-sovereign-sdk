@@ -32,7 +32,7 @@ pub struct AccessPatternAccount<S: Spec> {
     // pub post_hook: Vec<HooksConfig>,
 }
 
-impl<'a, S: Spec, Data> From<&'a AccountState<S, Data>> for AccessPatternAccount<S> {
+impl<S: Spec, Data> From<&AccountState<S, Data>> for AccessPatternAccount<S> {
     fn from(value: &AccountState<S, Data>) -> AccessPatternAccount<S> {
         AccessPatternAccount {
             private_key: value.private_key.clone(),

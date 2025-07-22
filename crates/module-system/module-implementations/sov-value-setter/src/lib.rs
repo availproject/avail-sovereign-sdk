@@ -51,7 +51,7 @@ pub struct ValueSetter<S: Spec> {
 
 /// Gas configuration for the bank module
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
-pub struct ValueSeterGasConfig<GU: Gas> {
+pub struct ValueSetterGasConfig<GU: Gas> {
     /// Gas price multiplier for the set_value operation
     pub set_value: GU,
 }
@@ -61,7 +61,7 @@ impl<S: Spec> Module for ValueSetter<S> {
 
     type Config = ValueSetterConfig<S>;
 
-    type CallMessage = call::CallMessage<S>;
+    type CallMessage = CallMessage<S>;
 
     type Event = Event;
 
@@ -84,10 +84,14 @@ impl<S: Spec> Module for ValueSetter<S> {
         let mut state_wrapped = state.to_revertable();
         let state = &mut state_wrapped;
         let res = match msg {
-            call::CallMessage::SetValue {
+            CallMessage::SetValue {
                 value: new_value,
                 gas,
             } => Ok(self.set_value(new_value, gas, context, state)?),
+            CallMessage::SetValueAndSleep {
+                value: new_value,
+                sleep_millis,
+            } => Ok(self.set_value_and_sleep(new_value, sleep_millis, context, state)?),
             CallMessage::SetManyValues(many) => Ok(self.set_values(many, context, state)?),
             CallMessage::AssertVisibleSlotNumber {
                 expected_visible_slot_number,

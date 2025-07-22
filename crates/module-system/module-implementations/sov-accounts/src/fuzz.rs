@@ -55,10 +55,7 @@ where
         u: &mut Unstructured<'a>,
         state: &mut StateCheckpoint<S>,
     ) -> arbitrary::Result<Self> {
-        let config: AccountConfig<S> = match u.arbitrary() {
-            Ok(config) => config,
-            Err(e) => return Err(e),
-        };
+        let config: AccountConfig<S> = u.arbitrary()?;
         let mut accounts = Accounts::default();
         let mut genesis_state = state.to_genesis_state_accessor::<Accounts<S>>(&config);
 

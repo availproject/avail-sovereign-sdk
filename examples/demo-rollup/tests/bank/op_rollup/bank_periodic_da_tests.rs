@@ -121,8 +121,7 @@ async fn send_test_bank_txs(
         rollup_height += 1;
         if rollup_height > (batch_1_rollup_height + attestation_publish_threshold) {
             panic!(
-                "Attestations haven't been posted after {} slots passed since batch publication",
-                attestation_publish_threshold
+                "Attestations haven't been posted after {attestation_publish_threshold} slots passed since batch publication"
             );
         }
     }
@@ -140,12 +139,9 @@ async fn get_max_attested_height(
     rollup_height: Option<u64>,
 ) -> anyhow::Result<u64> {
     let param = rollup_height
-        .map(|h| format!("?rollup_height={}", h))
+        .map(|h| format!("?rollup_height={h}"))
         .unwrap_or_default();
-    let url = format!(
-        "/modules/attester-incentives/state/maximum-attested-height{}",
-        param
-    );
+    let url = format!("/modules/attester-incentives/state/maximum-attested-height{param}");
     let response = client
         .query_rest_endpoint::<ResponseObject<ValueResponse>>(&url)
         .await?;

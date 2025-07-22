@@ -4,7 +4,7 @@ authors = { workspace = true }
 description = "A simple implementation of a sequencer for Sovereign SDK rollups"
 edition = { workspace = true }
 homepage = { workspace = true }
-license = { workspace = true }
+license = "Sovereign Labs Community Software License"
 repository = { workspace = true }
 
 version = { workspace = true }
@@ -35,7 +35,7 @@ serde_yaml = { workspace = true }
 serde_with = { workspace = true, features = ["base64"] }
 sov-blob-sender = { workspace = true }
 sov-blob-storage = { workspace = true, features = ["native"] }
-sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-rustls-ring-webpki", "postgres", "migrate" ] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "migrate"] }
 sov-kernels = { workspace = true, features = ["native"] }
 sov-metrics = { workspace = true }
 sov-rest-utils = { workspace = true }
@@ -51,8 +51,11 @@ tokio-stream = { workspace = true }
 uuid = { workspace = true, features = ["std", "v7"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 openapiv3 = { workspace = true }
+backon = { workspace = true }
 
 [dev-dependencies]
+tracing-subscriber = { workspace = true }
+arbitrary = { workspace = true }
 num_cpus = { workspace = true }
 rand = { workspace = true }
 proptest = { workspace = true }
@@ -69,6 +72,7 @@ sov-rollup-interface = { workspace = true }
 sov-api-spec = { workspace = true }
 sov-test-utils = { workspace = true }
 sov-paymaster = { workspace = true }
+sov-state = { workspace = true, features = ["native", "arbitrary", "test-utils"] }
 sov-mock-da = { workspace = true, features = ["native"] }
 sov-mock-zkvm = { workspace = true, features = ["native"] }
 sov-test-modules = { workspace = true, features = ["native"] }

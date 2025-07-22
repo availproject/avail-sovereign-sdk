@@ -100,20 +100,18 @@ fn encode_with_auth(tx: Transaction<IntegTestRuntime<S>, S>) -> FullyBakedTx {
     <IntegTestRuntime<S> as Runtime<S>>::Auth::encode_with_standard_auth(tx_bytes)
 }
 
-pub fn simulate_da_with_incorrect_direct_registration_msg(admin: TestPrivateKey) -> RawTx {
+pub fn simulate_da_with_incorrect_direct_registration_msg(admin: TestPrivateKey) -> FullyBakedTx {
     let bank_generator: BankMessageGenerator<S> = BankMessageGenerator::with_minter(admin);
     let create_token_message = bank_generator.create_default_messages().remove(0);
     let tx = create_token_message.to_tx::<IntegTestRuntime<S>>();
 
-    RawTx {
-        data: borsh::to_vec(&tx).unwrap(),
-    }
+    encode_with_auth(tx)
 }
 
 pub fn simulate_da_with_multiple_direct_registration_msg(
     sequencers: Vec<Vec<u8>>,
     admin: TestPrivateKey,
-) -> Vec<RawTx> {
+) -> Vec<FullyBakedTx> {
     let mut messages = Vec::default();
 
     let sequencer_and_stake = sequencers
@@ -131,9 +129,7 @@ pub fn simulate_da_with_multiple_direct_registration_msg(
     for mut message in default_messages {
         message.generation += nonce_offset;
         let tx = message.to_tx::<IntegTestRuntime<S>>();
-        messages.push(RawTx {
-            data: borsh::to_vec(&tx).unwrap(),
-        });
+        messages.push(encode_with_auth(tx));
     }
 
     messages

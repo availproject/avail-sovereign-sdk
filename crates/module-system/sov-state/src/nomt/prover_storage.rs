@@ -21,8 +21,7 @@ use crate::storage::ReadType;
 use crate::{
     Accessory, CompileTimeNamespace, MerkleProofSpec, Namespace, NativeStorage, NodeLeaf,
     NodeLeafAndMaybeValue, OrderedReadsAndWrites, ProvableCompileTimeNamespace, ProvableNamespace,
-    SlotKey, SlotValue, StateAccesses, StateRoot, StateUpdate, Storage, StorageProof, StorageRoot,
-    Witness,
+    SlotKey, SlotValue, StateAccesses, StateUpdate, Storage, StorageProof, StorageRoot, Witness,
 };
 
 type NomtSession<H> = nomt::Session<BinaryHasher<H>>;
@@ -398,43 +397,59 @@ where
         witness: &Self::Witness,
         prev_state_root: Self::Root,
     ) -> anyhow::Result<(Self::Root, Self::StateUpdate)> {
-        tracing::trace!(%prev_state_root, "NomtProverStorage, computing state update");
-        // User
+        let next_version = self.historical_state.get_next_version();
+        tracing::trace!(%prev_state_root, %next_version, "NomtProverStorage, computing state update");
+        // Open 2 sessions close to each other
         let user_session = self.state_session_builder.begin_user_session()?;
-        let prev_user_root = prev_state_root.namespace_root(ProvableNamespace::User);
+        let kernel_session = self.state_session_builder.begin_kernel_session()?;
+
+        let current_prev_user_root = user_session.prev_root().into_inner();
+        let current_prev_kernel_root = kernel_session.prev_root().into_inner();
+        let current_prev_root = StorageRoot::new(current_prev_user_root, current_prev_kernel_root);
+
+        // Check staleness, pre-computation:
+        if self.is_strict_mode && current_prev_root != prev_state_root {
+            anyhow::bail!("stale storage on next_version={}, passed prev_state_root {} does not match the current prev_state_root {}",
+                next_version,
+                prev_state_root,
+                current_prev_root
+            );
+        }
+
         let user_finished_session = {
             let _span = tracing::debug_span!("compute_state_update", namespace = "user").entered();
             compute_state_update_namespace::<S>(user_session, &state_accesses.user, witness)
                 .context("user state")?
         };
-        if self.is_strict_mode {
-            assert_eq!(
-                user_finished_session.prev_root().as_ref(),
-                &prev_user_root,
-                "User state root is not equal to the previous state root"
-            );
-        }
-
-        // Kernel
-        let kernel_session = self.state_session_builder.begin_kernel_session()?;
-        let prev_kernel_root = prev_state_root.namespace_root(ProvableNamespace::Kernel);
         let kernel_finished_session = {
             let _span =
                 tracing::debug_span!("compute_state_update", namespace = "kernel").entered();
             compute_state_update_namespace::<S>(kernel_session, &state_accesses.kernel, witness)
                 .context("kernel state")?
         };
-        if self.is_strict_mode {
-            assert_eq!(
-                kernel_finished_session.prev_root().as_ref(),
-                &prev_kernel_root,
-                "Kernel state root is not equal to the previous state root"
+
+        // Additional self-check that the finished session has the same previous root hash as passed prev_state_root.
+        let kernel_finished_session_prev_root = kernel_finished_session.prev_root().into_inner();
+        let user_finished_session_prev_root = user_finished_session.prev_root().into_inner();
+        let finished_session_prev_root = StorageRoot::new(
+            user_finished_session_prev_root,
+            kernel_finished_session_prev_root,
+        );
+
+        // Check staleness, post-computation. This should check if storage became stale during the computation.
+        if self.is_strict_mode && prev_state_root != finished_session_prev_root {
+            anyhow::bail!("stale storage on next_version={}, passed prev_state_root {} does not match the current prev_state_root {}",
+                next_version,
+                prev_state_root,
+                current_prev_root
             );
         }
 
         let user_root = user_finished_session.root();
         let kernel_root = kernel_finished_session.root();
         let root = StorageRoot::new(user_root.into_inner(), kernel_root.into_inner());
+
+        tracing::debug!(state_root = %root, %next_version, "computed next state root");
 
         let state_update = NomtStateUpdate {
             user: user_finished_session,
@@ -507,6 +522,12 @@ where
         self.historical_state.get_next_version().saturating_sub(1)
     }
 
+    fn latest_version_unbound(&self) -> SlotNumber {
+        self.historical_state
+            .last_version_unbound()
+            .expect("Issue with underlying database")
+    }
+
     fn get_with_proof<N: ProvableCompileTimeNamespace>(
         &self,
         key: SlotKey,
@@ -546,15 +567,7 @@ where
             }
             Some(v) => v,
         };
-        let raw_root = self
-            .historical_state
-            .get_serialized_root_hash(version_to_use)?
-            .context(format!(
-                "Root hash not found for version {}.",
-                version_to_use
-            ))?;
-        let storage_root_historical =
-            borsh::from_slice(&raw_root).expect("Failed to deserialize root hash");
+        let storage_root_historical = self.get_root_hash_unbound(version_to_use)?;
         if self.should_check_dbs_sync(version_to_use) {
             let user_session = self.state_session_builder.begin_user_session()?;
             let user_root = user_session.prev_root();
@@ -569,6 +582,17 @@ where
             );
         }
 
+        Ok(storage_root_historical)
+    }
+
+    fn get_root_hash_unbound(&self, version: SlotNumber) -> anyhow::Result<Self::Root> {
+        let raw_root = self
+            .historical_state
+            .get_serialized_root_hash(version)?
+            .context(format!("Root hash not found for version {version}."))?;
+        let storage_root_historical =
+            borsh::from_slice(&raw_root).expect("Failed to deserialize root hash");
+        tracing::trace!(%version, root_hash = %storage_root_historical, "Got unbound root hash");
         Ok(storage_root_historical)
     }
 }

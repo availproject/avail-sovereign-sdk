@@ -85,7 +85,7 @@ fn deserialize_celestia_address(
         bytes
             .try_into()
             .map_err(|e: <Vec<u8> as TryInto<tendermint::account::Id>>::Error| {
-                std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+                std::io::Error::other(e.to_string())
             })?;
     Ok(AccAddress::new(id))
 }
@@ -172,7 +172,7 @@ mod tests {
     fn test_address_display_from_string() {
         let raw_address_str = ADDR_2;
         let address = CelestiaAddress::from_str(raw_address_str).unwrap();
-        let output = format!("{}", address);
+        let output = format!("{address}");
         assert_eq!(raw_address_str, output);
     }
 
@@ -193,7 +193,7 @@ mod tests {
         let raw_address_str = ADDR_3;
         let raw_address: Vec<u8> = raw_address_str.bytes().collect();
         let address = CelestiaAddress::try_from(&raw_address[..]).unwrap();
-        let output = format!("{}", address);
+        let output = format!("{address}");
         assert_eq!(raw_address_str, output);
     }
 
@@ -215,7 +215,7 @@ mod tests {
         let address = CelestiaAddress::try_from(bytes);
         assert!(address.is_ok());
         let address = address.unwrap();
-        let output = format!("{}", address);
+        let output = format!("{address}");
         assert_eq!(encoded, output);
     }
 
@@ -227,7 +227,7 @@ mod tests {
         let address = CelestiaAddress::try_from(bytes);
         assert!(address.is_ok());
         let address = address.unwrap();
-        let output = format!("{}", address);
+        let output = format!("{address}");
         assert_eq!(encoded, output);
     }
 
@@ -267,7 +267,7 @@ mod tests {
     ) {
         let result = CelestiaAddress::from_str(&input);
         if let Ok(address) = result {
-            let output = format!("{}", address);
+            let output = format!("{address}");
             assert_eq!(input, output);
         }
     }

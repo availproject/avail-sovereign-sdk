@@ -37,7 +37,11 @@ fn setup_dynamic_gas_update_tests() -> (TestData<S>, TestRunner<TestChainStateRu
             is_minter: true,
         })]);
 
-    let user = genesis_config.additional_accounts.first().unwrap().clone();
+    let user = genesis_config
+        .additional_accounts()
+        .first()
+        .unwrap()
+        .clone();
 
     let genesis = GenesisConfig::from_minimal_config(
         genesis_config.into(),
@@ -103,9 +107,7 @@ fn test_gas_price_increases_if_gas_used_exceeds_gas_target() {
 
     assert!(
         initial_gas_price.dim_is_less_than(&gas_price),
-        "The gas price should have increased, current gas price: {:?}, initial gas price: {:?}",
-        gas_price,
-        initial_gas_price
+        "The gas price should have increased, current gas price: {gas_price:?}, initial gas price: {initial_gas_price:?}"
     );
 }
 
@@ -153,8 +155,6 @@ fn test_gas_price_decreases_if_gas_used_is_below_gas_target() {
 
     assert!(
         gas_price.dim_is_less_than(&initial_gas_price),
-        "The gas price should have decreased, current gas price: {:?}, initial gas price: {:?}",
-        gas_price,
-        initial_gas_price
+        "The gas price should have decreased, current gas price: {gas_price:?}, initial gas price: {initial_gas_price:?}"
     );
 }

@@ -90,12 +90,12 @@ where
         if let Some(duplicate_proof) = prover_state.get_prover_status(&block_header_hash) {
             return match duplicate_proof {
                 ProverStatus::ProvingInProgress => Err(anyhow::anyhow!(
-                    "Proof generation for {:?} still in progress",
+                    "Proof generation for {} still in progress",
                     block_header_hash
                 )
                 .into()),
                 ProverStatus::Proved(_) => Err(anyhow::anyhow!(
-                    "Witness for block_header_hash {:?}, submitted multiple times.",
+                    "Witness for block_header_hash {}, submitted multiple times.",
                     block_header_hash,
                 )
                 .into()),

@@ -99,7 +99,6 @@ struct TestClosureArgs<S: Storage> {
 
 /// A helper method for the visible hash tests. It advances the module state by `num_slots` and runs a closure with
 /// the specified test arguments after each iteration.
-
 fn last_state_root_closure<RT: Runtime<S> + MinimalGenesis<S>>(
     test_closure: &mut impl FnMut(TestClosureArgs<<S as Spec>::Storage>),
     runner: &mut TestRunner<RT>,

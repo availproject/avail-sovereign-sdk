@@ -93,9 +93,7 @@ impl<S: Spec> TestUser<S> {
         if let Some(credential_id) = self.custom_credential_id {
             credential_id
         } else {
-            self.private_key
-                .pub_key()
-                .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>()
+            self.private_key.pub_key().credential_id()
         }
     }
 

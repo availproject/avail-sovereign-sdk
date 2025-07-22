@@ -167,10 +167,7 @@ pub fn to_json_object<T: Serialize>(value: T) -> JsonObject {
     let value = serde_json::to_value(value).unwrap();
     match value {
         serde_json::Value::Object(obj) => obj,
-        _ => panic!(
-            "Expected serialization to produce a JSON object; got {:?}",
-            value
-        ),
+        _ => panic!("Expected serialization to produce a JSON object; got {value:?}"),
     }
 }
 

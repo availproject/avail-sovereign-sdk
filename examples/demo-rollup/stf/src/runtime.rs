@@ -17,14 +17,14 @@
 //! Runtime lifecycle:
 //!
 //! 1. Initialization:
-//!     When a rollup is deployed for the first time, it needs to set its genesis state.
-//!     The `#[derive(Genesis)` macro will generate `Runtime::genesis(config)` method which returns
-//!     `Storage` with the initialized state.
+//!    When a rollup is deployed for the first time, it needs to set its genesis state.
+//!    The `#[derive(Genesis)` macro will generate `Runtime::genesis(config)` method which returns
+//!    `Storage` with the initialized state.
 //!
 //! 2. Calls:      
-//!     The `Module` interface defines a `call` method which accepts a module-defined type and triggers the specific `module logic.`
-//!     In general, the point of a call is to change the module state, but if the call throws an error,
-//!     no module specific state is updated (the transaction is reverted).
+//!    The `Module` interface defines a `call` method which accepts a module-defined type and triggers the specific `module logic.`
+//!    In general, the point of a call is to change the module state, but if the call throws an error,
+//!    no module-specific state is updated (the transaction is reverted).
 #[cfg(feature = "native")]
 use std::sync::Arc;
 
@@ -60,8 +60,6 @@ where
     pub bank: sov_bank::Bank<S>,
     /// The Sequencer Registry module.
     pub sequencer_registry: sov_sequencer_registry::SequencerRegistry<S>,
-    /// The Value Setter module.
-    pub value_setter: sov_value_setter::ValueSetter<S>,
     /// The Operator Incentives module.
     pub operator_incentives: sov_operator_incentives::OperatorIncentives<S>,
     /// The Attester Incentives module.
@@ -83,6 +81,8 @@ where
     pub evm: sov_evm::Evm<S>,
     /// A module used in benchmarks to generate a wide range of transaction access patterns.
     pub access_pattern: sov_test_modules::access_pattern::AccessPattern<S>,
+    /// A module for synthetic load testing and state operations.
+    pub synthetic_load: sov_synthetic_load::SyntheticLoad<S>,
 }
 
 impl<S> sov_modules_stf_blueprint::Runtime<S> for Runtime<S>
@@ -157,7 +157,9 @@ where
     #[cfg(feature = "native")]
     fn get_transaction_delay_ms(&self, call: &Self::Decodable) -> u64 {
         match call {
-            Self::Decodable::ValueSetter(sov_value_setter::CallMessage::SetValue { .. }) => 100,
+            Self::Decodable::SyntheticLoad(
+                sov_synthetic_load::CallMessage::RunCPUHeavyOperation { .. },
+            ) => 100,
             _ => 0,
         }
     }
@@ -175,6 +177,7 @@ where
             sequencer_registry: &mut self.sequencer_registry,
             accounts: &mut self.accounts,
             uniqueness: &mut self.uniqueness,
+            operator_incentives: &mut self.operator_incentives,
             prover_incentives: &mut self.prover_incentives,
             attester_incentives: &mut self.attester_incentives,
         })

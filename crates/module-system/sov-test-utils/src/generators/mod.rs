@@ -203,7 +203,7 @@ pub trait MessageGenerator {
                 curr_sequence_number,
             } => {
                 let batch = PreferredBatchData {
-                    data: txs,
+                    data: txs.into(),
                     sequence_number: curr_sequence_number
                         .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
                     visible_slots_to_advance: NonZero::new(1).unwrap(),

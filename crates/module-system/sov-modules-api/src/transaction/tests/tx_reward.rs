@@ -67,7 +67,7 @@ fn test_display_transaction_reward() {
     };
 
     assert_eq!(
-        format!("{}", tx_reward),
+        format!("{tx_reward}"),
         "TransactionConsumption { remaining_funds: 10, base_fee: GasUnit[100, 100], priority_fee: 50, gas_price: GasPrice[1, 1] }"
     );
 }

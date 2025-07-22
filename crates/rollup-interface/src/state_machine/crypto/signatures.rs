@@ -5,8 +5,6 @@ use std::fmt::Debug;
 use std::hash;
 
 use derive_more::derive::Display;
-use digest::typenum::U32;
-use digest::Digest;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "native")]
 use sov_universal_wallet::UniversalWallet;
@@ -46,7 +44,7 @@ pub trait PublicKey:
     Eq + hash::Hash + Clone + Debug + Send + Sync + Serialize + for<'a> Deserialize<'a>
 {
     /// Returns hashed public key.
-    fn credential_id<Hasher: Digest<OutputSize = U32>>(&self) -> CredentialId;
+    fn credential_id(&self) -> CredentialId;
 }
 
 /// A private key for generating digital signatures.

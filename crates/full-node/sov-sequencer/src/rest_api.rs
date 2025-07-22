@@ -56,16 +56,30 @@ impl<Seq: Sequencer> SequencerApis<Seq> {
                 axum::routing::get(Self::subscribe_to_events),
             )
             .route(
+                "/sequencer/txs/ws",
+                axum::routing::get(Self::subscribe_to_transactions),
+            )
+            .route(
                 "/sequencer/unstable/events/:eventId",
                 axum::routing::get(Self::axum_get_event),
             )
             .route(
                 "/sequencer/unstable/events",
                 axum::routing::get(Self::axum_list_events),
-            )
-            .with_state(state);
+            );
 
-        preconfigured_router_layers(router)
+        #[cfg(feature = "test-utils")]
+        let router = router
+            .route(
+                "/sequencer/test-utils/force-close-batch",
+                axum::routing::post(Self::axum_force_close_batch),
+            )
+            .route(
+                "/sequencer/test-utils/state-updates/ws",
+                axum::routing::get(Self::subscribe_to_state_updates_unstable),
+            );
+
+        preconfigured_router_layers(router).with_state(state)
     }
 
     async fn send_initial_status_to_ws(
@@ -210,6 +224,25 @@ impl<Seq: Sequencer> SequencerApis<Seq> {
         })
     }
 
+    async fn subscribe_to_transactions(
+        State(state): State<Self>,
+        ws: WebSocketUpgrade,
+    ) -> impl IntoResponse {
+        ws.on_upgrade(|socket| async move {
+            let stream = state
+                .sequencer
+                .subscribe_transactions()
+                .await
+                .map(|receiver| {
+                    BroadcastStream::new(receiver)
+                        .map_err(|err| anyhow::anyhow!("Error creating broadcast stream: {err}"))
+                        .boxed()
+                })
+                .unwrap_or_else(|| futures::stream::empty().boxed());
+            serve_generic_ws_subscription(socket, stream, state.shutdown_receiver.clone()).await;
+        })
+    }
+
     async fn axum_get_event(
         state: State<Self>,
         Path(event_number): Path<u64>,
@@ -224,6 +257,37 @@ impl<Seq: Sequencer> SequencerApis<Seq> {
         } else {
             Err(errors::not_found_404("Event", event_number))
         }
+    }
+
+    #[cfg(feature = "test-utils")]
+    async fn axum_force_close_batch(state: State<Self>) -> ApiResult<()> {
+        state
+            .sequencer
+            .force_close_current_batch()
+            .await
+            .map_err(|e| errors::bad_request_400("Could not force close batch", e))?;
+        Ok(().into())
+    }
+
+    /// Subscribe to state updates. Note that notifications may be delivered out of order.
+    #[cfg(feature = "test-utils")]
+    async fn subscribe_to_state_updates_unstable(
+        State(state): State<Self>,
+        ws: WebSocketUpgrade,
+    ) -> impl IntoResponse {
+        ws.on_upgrade(|socket| async move {
+            let stream = state
+                .sequencer
+                .subscribe_state_updates_unstable()
+                .await
+                .map(|receiver| {
+                    BroadcastStream::new(receiver)
+                        .map_err(|err| anyhow::anyhow!("Error creating broadcast stream: {err}"))
+                        .boxed()
+                })
+                .unwrap_or_else(|| futures::stream::empty().boxed());
+            serve_generic_ws_subscription(socket, stream, state.shutdown_receiver.clone()).await;
+        })
     }
 
     async fn axum_list_events(

@@ -102,11 +102,7 @@ fn test_key_import() {
     assert_eq!(entry.nickname.as_ref().unwrap(), key_name);
     assert_eq!(
         entry.address,
-        key_and_address
-            .private_key
-            .pub_key()
-            .credential_id::<<<TestSpec as Spec>::CryptoSpec as CryptoSpec>::Hasher>()
-            .into()
+        key_and_address.private_key.pub_key().credential_id().into()
     );
 }
 
@@ -156,7 +152,7 @@ fn test_duplicate_nickname_generate() {
     let result = generate_key_in_state(Some(key_name), &mut wallet_state, app_dir.path());
     assert!(result.is_err());
     let generate_error = result.unwrap_err();
-    let expected_error_message = format!("Key with nickname '{}' already exists", key_name);
+    let expected_error_message = format!("Key with nickname '{key_name}' already exists");
     // Skipping context
     assert_eq!(
         expected_error_message,

@@ -208,10 +208,7 @@ impl<S: Spec> FinalizeHook for Evm<S> {
             .get(state)
             .unwrap_infallible()
             .unwrap_or_else(|| {
-                panic!(
-                    "Pending head must be set to block {}, but was empty",
-                    expected_block_number
-                )
+                panic!("Pending head must be set to block {expected_block_number}, but was empty")
             });
 
         assert_eq!(

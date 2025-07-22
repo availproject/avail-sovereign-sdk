@@ -23,7 +23,7 @@ semicolon_if_nothing_returned = "deny"
 float_arithmetic = "deny"              # Can cause subtle bugs due to different behavior between native and zkVM execution.
 
 [build-dependencies]
-risc0-build = "1.2"
+risc0-build = "2.1"
 
 [package.metadata.risc0]
 methods = ["guest-celestia", "guest-mock"]

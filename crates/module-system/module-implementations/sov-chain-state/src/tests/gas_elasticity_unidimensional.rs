@@ -24,10 +24,7 @@ fn assert_correct_gas_update(
         expected_base_fee_per_gas,
         computed_base_fee_per_gas,
         "The result of `compute_base_fee_per_gas_unidimensional` does not match the expected value. 
-        Expected: {:?}, actual: {:?}, test message: {}",
-        expected_base_fee_per_gas,
-        computed_base_fee_per_gas,
-        assert_error_message
+        Expected: {expected_base_fee_per_gas:?}, actual: {computed_base_fee_per_gas:?}, test message: {assert_error_message}"
     );
 }
 

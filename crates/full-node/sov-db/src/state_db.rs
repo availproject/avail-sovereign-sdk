@@ -219,7 +219,7 @@ pub struct JmtHandler<'a, N: Namespace> {
 }
 
 /// Default implementations of [`TreeReader`] for [`StateDb`]
-impl<'a, N: Namespace> TreeReader for JmtHandler<'a, N> {
+impl<N: Namespace> TreeReader for JmtHandler<'_, N> {
     fn get_node_option(
         &self,
         node_key: &jmt::storage::NodeKey,
@@ -253,7 +253,7 @@ impl<'a, N: Namespace> TreeReader for JmtHandler<'a, N> {
     }
 }
 
-impl<'a, N: Namespace> HasPreimage for JmtHandler<'a, N> {
+impl<N: Namespace> HasPreimage for JmtHandler<'_, N> {
     fn preimage(&self, key_hash: KeyHash) -> anyhow::Result<Option<Vec<u8>>> {
         self.state_db.db.get::<KeyHashToKey<N>>(&key_hash.0)
     }

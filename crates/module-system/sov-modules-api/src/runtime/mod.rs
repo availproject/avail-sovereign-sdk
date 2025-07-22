@@ -104,8 +104,7 @@ pub fn decode_borsh_serialized_message<T: borsh::BorshDeserialize>(
     let res = T::deserialize(&mut serialized_message)?;
 
     if !serialized_message.is_empty() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
+        return Err(io::Error::other(
             "the provided message contains dangling data",
         ));
     }

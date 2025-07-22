@@ -205,9 +205,7 @@ async fn rest_api_routes() {
         assert_eq!(
             path_parameters.len(),
             brace_count,
-            "Missing parameter declaration in path {} {:?}",
-            path,
-            path_parameters
+            "Missing parameter declaration in path {path} {path_parameters:?}"
         );
 
         let mut path = path;
@@ -217,7 +215,7 @@ async fn rest_api_routes() {
             }
         }
 
-        let url = format!("{}{}", base_path, path);
+        let url = format!("{base_path}{path}");
         let response = client
             .get(&url)
             .send()
@@ -231,10 +229,6 @@ async fn rest_api_routes() {
         } else {
             !status.is_server_error()
         };
-        assert!(
-            success_condition,
-            "Failed querying URL {} | {}",
-            url, status
-        );
+        assert!(success_condition, "Failed querying URL {url} | {status}");
     }
 }

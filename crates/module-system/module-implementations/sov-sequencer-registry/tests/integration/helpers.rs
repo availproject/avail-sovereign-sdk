@@ -45,9 +45,9 @@ pub fn setup_with_custom_runtime(runtime: RT) -> (TestRoles, TestRunner<TestRunt
     let genesis_sequencer_address = genesis_sequencer.user_info.address();
     let genesis_sequencer_bond = genesis_sequencer.bond;
 
-    let admin = genesis_config.additional_accounts[0].clone();
+    let admin = genesis_config.additional_accounts()[0].clone();
 
-    let other_sequencer = genesis_config.additional_accounts[1].clone();
+    let other_sequencer = genesis_config.additional_accounts()[1].clone();
 
     let value_setter_config = ValueSetterConfig {
         admin: admin.address(),

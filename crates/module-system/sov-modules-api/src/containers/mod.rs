@@ -28,19 +28,19 @@ pub struct Borrowed<'a, T, U> {
     _reference: &'a U,
 }
 
-impl<'a, T: std::fmt::Debug, U> std::fmt::Debug for Borrowed<'a, T, U> {
+impl<T: std::fmt::Debug, U> std::fmt::Debug for Borrowed<'_, T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.value)
     }
 }
 
-impl<'a, T: std::fmt::Display, U> std::fmt::Display for Borrowed<'a, T, U> {
+impl<T: std::fmt::Display, U> std::fmt::Display for Borrowed<'_, T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
     }
 }
 
-impl<'a, T, U> std::ops::Deref for Borrowed<'a, T, U> {
+impl<T, U> std::ops::Deref for Borrowed<'_, T, U> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -93,21 +93,21 @@ pub struct BorrowedMut<'a, T, U> {
 }
 
 // TODO: Add PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Etc
-impl<'a, T: std::fmt::Debug, U> std::fmt::Debug for BorrowedMut<'a, T, U> {
+impl<T: std::fmt::Debug, U> std::fmt::Debug for BorrowedMut<'_, T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use std::ops::Deref;
         write!(f, "{:?}", self.value.deref())
     }
 }
 
-impl<'a, T: std::fmt::Display, U> std::fmt::Display for BorrowedMut<'a, T, U> {
+impl<T: std::fmt::Display, U> std::fmt::Display for BorrowedMut<'_, T, U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use std::ops::Deref;
         write!(f, "{}", self.value.deref())
     }
 }
 
-impl<'a, T, U> std::ops::Deref for BorrowedMut<'a, T, U> {
+impl<T, U> std::ops::Deref for BorrowedMut<'_, T, U> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -115,7 +115,7 @@ impl<'a, T, U> std::ops::Deref for BorrowedMut<'a, T, U> {
     }
 }
 
-impl<'a, T, U> std::ops::DerefMut for BorrowedMut<'a, T, U> {
+impl<T, U> std::ops::DerefMut for BorrowedMut<'_, T, U> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.value
     }
@@ -176,7 +176,7 @@ impl<'a, T, U> BorrowedMut<'a, Option<T>, U> {
     }
 }
 
-impl<'a, N, V, Codec> BorrowedMut<'a, V, NamespacedStateValue<N, V, Codec>>
+impl<N, V, Codec> BorrowedMut<'_, V, NamespacedStateValue<N, V, Codec>>
 where
     Codec: StateCodec,
     Codec::ValueCodec: StateItemCodec<V>,
@@ -201,7 +201,7 @@ where
     }
 }
 
-impl<'a, N, K, V, Codec> BorrowedMut<'a, V, NamespacedStateMap<N, K, V, Codec>>
+impl<N, K, V, Codec> BorrowedMut<'_, V, NamespacedStateMap<N, K, V, Codec>>
 where
     K: FromStr + Display,
     Codec: StateCodec,

@@ -115,7 +115,7 @@ impl Metric for GasConstantMetric {
                 // Source: (Special telegraf characters)[`https://docs.influxdata.com/influxdb/cloud/reference/syntax/line-protocol/#special-characters`]
                 let telegraf_formatted_key = safe_telegraf_string(key);
 
-                format!("{}={}", telegraf_formatted_key, value)
+                format!("{telegraf_formatted_key}={value}")
             })
             .collect::<Vec<_>>();
 

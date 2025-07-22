@@ -80,7 +80,7 @@ impl<'a, S: Spec, I: TxState<S>> RevertableTxState<'a, S, I> {
     }
 }
 
-impl<'a, S: Spec, I: TxState<S>> PerBlockCache for RevertableTxState<'a, S, I> {
+impl<S: Spec, I: TxState<S>> PerBlockCache for RevertableTxState<'_, S, I> {
     fn get_cached<T: 'static + Send + Sync>(&self) -> Option<&T> {
         match self.temp_cache.get::<T>() {
             CacheLookup::Hit(value) => value,
@@ -101,7 +101,7 @@ impl<'a, S: Spec, I: TxState<S>> PerBlockCache for RevertableTxState<'a, S, I> {
     }
 }
 
-impl<'a, S: Spec, I: TxState<S>> VersionReader for RevertableTxState<'a, S, I> {
+impl<S: Spec, I: TxState<S>> VersionReader for RevertableTxState<'_, S, I> {
     fn rollup_height_to_access(&self) -> RollupHeight {
         self.inner.rollup_height_to_access()
     }
@@ -115,7 +115,7 @@ impl<'a, S: Spec, I: TxState<S>> VersionReader for RevertableTxState<'a, S, I> {
     }
 }
 
-impl<'a, S: Spec, I: TxState<S>> UniversalStateAccessor for RevertableTxState<'a, S, I> {
+impl<S: Spec, I: TxState<S>> UniversalStateAccessor for RevertableTxState<'_, S, I> {
     fn get_size(&mut self, namespace: Namespace, key: &SlotKey) -> Option<u32> {
         if let Some(value) = self.writes.get(&(namespace, key.clone())) {
             return value.as_ref().map(|v| v.size());
@@ -139,7 +139,7 @@ impl<'a, S: Spec, I: TxState<S>> UniversalStateAccessor for RevertableTxState<'a
     }
 }
 
-impl<'a, S: Spec, I: TxState<S>> GasMeter for RevertableTxState<'a, S, I> {
+impl<S: Spec, I: TxState<S>> GasMeter for RevertableTxState<'_, S, I> {
     type Spec = S;
     fn charge_gas(&mut self, amount: &S::Gas) -> Result<(), GasMeteringError<S::Gas>> {
         self.inner.charge_gas(amount)
@@ -159,15 +159,15 @@ impl<'a, S: Spec, I: TxState<S>> GasMeter for RevertableTxState<'a, S, I> {
     }
 }
 
-impl<'a, S: Spec, I: TxState<S>> ProvableStateReader<User> for RevertableTxState<'a, S, I> {}
-impl<'a, S: Spec, I: TxState<S>> ProvableStateReader<KernelType> for RevertableTxState<'a, S, I> {}
-impl<'a, S: Spec, I: TxState<S>> ProvableStateWriter<User> for RevertableTxState<'a, S, I> {}
-impl<'a, S: Spec, I: TxState<S>> ProvableStateWriter<KernelType> for RevertableTxState<'a, S, I> {}
-impl<'a, S: Spec, I: TxState<S>> AccessoryStateWriter for RevertableTxState<'a, S, I> {}
+impl<S: Spec, I: TxState<S>> ProvableStateReader<User> for RevertableTxState<'_, S, I> {}
+impl<S: Spec, I: TxState<S>> ProvableStateReader<KernelType> for RevertableTxState<'_, S, I> {}
+impl<S: Spec, I: TxState<S>> ProvableStateWriter<User> for RevertableTxState<'_, S, I> {}
+impl<S: Spec, I: TxState<S>> ProvableStateWriter<KernelType> for RevertableTxState<'_, S, I> {}
+impl<S: Spec, I: TxState<S>> AccessoryStateWriter for RevertableTxState<'_, S, I> {}
 #[cfg(feature = "test-utils")]
-impl<'a, S: Spec, I: TxState<S>> AccessoryStateReader for RevertableTxState<'a, S, I> {}
+impl<S: Spec, I: TxState<S>> AccessoryStateReader for RevertableTxState<'_, S, I> {}
 
-impl<'a, S: Spec, I: TxState<S>> EventContainer for RevertableTxState<'a, S, I> {
+impl<S: Spec, I: TxState<S>> EventContainer for RevertableTxState<'_, S, I> {
     fn add_event<E: 'static + core::marker::Send>(&mut self, event_key: &str, event: E) {
         self.events.push(TypeErasedEvent::new(event_key, event));
     }

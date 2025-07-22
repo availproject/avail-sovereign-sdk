@@ -22,7 +22,7 @@ pub struct BankAccount<S: Spec> {
     pub(crate) tag_changes: Vec<TagAction<BankTag>>,
 }
 
-impl<'a, S: Spec, T> From<&'a AccountState<S, T>> for BankAccount<S> {
+impl<S: Spec, T> From<&AccountState<S, T>> for BankAccount<S> {
     fn from(value: &AccountState<S, T>) -> BankAccount<S> {
         BankAccount {
             private_key: value.private_key.clone(),
@@ -179,9 +179,8 @@ impl<S: Spec> BankAccount<S> {
                 .expect("Balances cannot be empty because we just appended an entry.");
         };
 
-        return self
-            .balances
+        self.balances
             .get_mut(idx)
-            .expect("We just checked that the entry was present.");
+            .expect("We just checked that the entry was present.")
     }
 }

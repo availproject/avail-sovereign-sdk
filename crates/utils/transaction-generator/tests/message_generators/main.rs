@@ -216,7 +216,13 @@ fn setup_harness<
             ValueSetterDiscriminants::SetValue,
             ValueSetterDiscriminants::SetManyValues,
         ]),
-        max_value_setter_vec_len,
+        sov_transaction_generator::generators::value_setter::ValueSetterGeneratorOptions {
+            maximum_vec_length: max_value_setter_vec_len,
+            min_and_max_number_of_individual_state_operations: (0, 0),
+            min_and_max_number_of_new_values_for_heavy_state: (0, 0),
+            min_and_max_number_of_iterations_for_cpu_heavy_operation: (0, 0),
+            max_heavy_state_size: 0,
+        },
         admin.private_key.clone(),
     ));
 
@@ -316,9 +322,13 @@ fn setup_roles_and_config(user_balance: Amount) -> Setup {
 
     let sequencer = genesis_config.initial_sequencer.clone();
     let attester = genesis_config.initial_attester.clone();
-    let payer = genesis_config.additional_accounts.first().unwrap().clone();
-    let admin = genesis_config.additional_accounts.get(1).unwrap().clone();
-    let user = genesis_config.additional_accounts.get(2).unwrap().clone();
+    let payer = genesis_config
+        .additional_accounts()
+        .first()
+        .unwrap()
+        .clone();
+    let admin = genesis_config.additional_accounts().get(1).unwrap().clone();
+    let user = genesis_config.additional_accounts().get(2).unwrap().clone();
     let genesis_config = GenesisConfig::from_minimal_config(
         genesis_config.into(),
         PaymasterConfig {

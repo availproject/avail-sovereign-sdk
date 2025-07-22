@@ -47,8 +47,7 @@ impl HttpValueSetterClient {
         let response = self
             .client
             .query_rest_endpoint::<ResponseObject<ValueResponse<u32>>>(&format!(
-                "/modules/value-setter/state/value{}",
-                rollup_height_param
+                "/modules/value-setter/state/value{rollup_height_param}"
             ))
             .await
             .unwrap();

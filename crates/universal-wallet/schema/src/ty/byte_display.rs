@@ -102,11 +102,11 @@ impl ByteDisplay {
             ByteDisplay::Hex => {
                 f.write_str("0x")?;
                 for byte in input {
-                    write!(f, "{:02x}", byte)?;
+                    write!(f, "{byte:02x}")?;
                 }
             }
             ByteDisplay::Decimal => {
-                write!(f, "{:?}", input)?;
+                write!(f, "{input:?}")?;
             }
             ByteDisplay::Bech32 { prefix } => {
                 bech32::encode_to_fmt::<Bech32, _>(f, *prefix, input)?

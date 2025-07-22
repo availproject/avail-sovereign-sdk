@@ -12,7 +12,11 @@ pub fn setup() -> (TestUser<S>, TestRunner<TestOptimisticRuntime<S>, S>) {
     let genesis_config =
         HighLevelOptimisticGenesisConfig::generate().add_accounts_with_default_balance(1);
 
-    let admin = genesis_config.additional_accounts.first().unwrap().clone();
+    let admin = genesis_config
+        .additional_accounts()
+        .first()
+        .unwrap()
+        .clone();
 
     let value_setter_config = ValueSetterConfig {
         admin: admin.address(),

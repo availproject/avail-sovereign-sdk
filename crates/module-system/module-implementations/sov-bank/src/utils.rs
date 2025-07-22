@@ -167,7 +167,7 @@ pub enum TokenHolderRef<'a, S: Spec> {
     Derived(&'a DerivedHolder),
 }
 
-impl<'a, S: Spec> TokenHolderRef<'a, S> {
+impl<S: Spec> TokenHolderRef<'_, S> {
     /// Converts `TokenHolderRef` to byte slice.
     pub fn as_bytes(&self) -> &[u8] {
         match self {
@@ -203,7 +203,7 @@ impl<'a, S: Spec> From<TokenHolderRef<'a, S>> for TokenHolder<S> {
     }
 }
 
-impl<'a, S: Spec> Hash for TokenHolderRef<'a, S> {
+impl<S: Spec> Hash for TokenHolderRef<'_, S> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             Self::User(addr) => {
@@ -222,7 +222,7 @@ impl<'a, S: Spec> Hash for TokenHolderRef<'a, S> {
     }
 }
 
-impl<'a, S: Spec> PartialEq for TokenHolderRef<'a, S> {
+impl<S: Spec> PartialEq for TokenHolderRef<'_, S> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::User(a), Self::User(b)) => a == b,
@@ -233,10 +233,10 @@ impl<'a, S: Spec> PartialEq for TokenHolderRef<'a, S> {
     }
 }
 
-impl<'a, S: Spec> Eq for TokenHolderRef<'a, S> {}
+impl<S: Spec> Eq for TokenHolderRef<'_, S> {}
 
 // Manually implement Clone because derive infurs a spurious `Spec: Clone` bound
-impl<'a, S: Spec> Clone for TokenHolderRef<'a, S> {
+impl<S: Spec> Clone for TokenHolderRef<'_, S> {
     fn clone(&self) -> Self {
         *self
     }

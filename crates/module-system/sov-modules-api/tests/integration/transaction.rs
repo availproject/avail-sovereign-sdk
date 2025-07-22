@@ -164,6 +164,6 @@ mod web3_compatibility {
         let schema = Schema::of_single_type::<Transaction<Runtime, TestSpec>>().unwrap();
 
         let result = schema.json_to_borsh(0, json);
-        assert!(result.is_ok(), "{ASSERT_MSG}. Error: {:?}", result);
+        assert!(result.is_ok(), "{ASSERT_MSG}. Error: {result:?}");
     }
 }

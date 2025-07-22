@@ -96,7 +96,7 @@ error[E0277]: the trait bound `for<'de> RuntimeEvent<S>: Deserialize<'de>` is no
  --> tests/integration/trybuild/dispatch/derive_event_no_default_attrs.rs:6:42
   |
 6 | #[derive(Default, Genesis, DispatchCall, Event, MessageCodec)]
-  |                                          ^^^^^ the trait `for<'de> Deserialize<'de>` is not implemented for `RuntimeEvent<S>`, which is required by `<Runtime<S> as RuntimeEventProcessor>::RuntimeEvent: DeserializeOwned`
+  |                                          ^^^^^ the trait `for<'de> Deserialize<'de>` is not implemented for `RuntimeEvent<S>`
   |
   = note: for local types consider adding `#[derive(serde::Deserialize)]` to your `RuntimeEvent<S>` type
   = note: for types from other crates check whether the crate offers a `serde` feature flag

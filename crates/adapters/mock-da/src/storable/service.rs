@@ -142,6 +142,16 @@ impl StorableMockDaService {
             .store(false, Ordering::Relaxed);
     }
 
+    /// Returns a handle to the `StorableMockDaLayer` backing this service.
+    pub fn da_layer(&self) -> Arc<RwLock<StorableMockDaLayer>> {
+        self.da_layer.clone()
+    }
+
+    /// Returns the `BlockProducingConfig` used by this service
+    pub fn block_producing(&self) -> &BlockProducingConfig {
+        &self.block_producing
+    }
+
     /// The `send_transaction` method will start posting blobs to the DA.
     pub fn set_success_send_blob(&self) {
         self.send_transaction_success.store(true, Ordering::Relaxed);

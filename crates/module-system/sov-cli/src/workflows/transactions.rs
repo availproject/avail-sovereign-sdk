@@ -120,7 +120,7 @@ where
                         signed_tx,
                     };
                     let output = serde_json::to_string_pretty(&output)?;
-                    writeln!(&mut out, "{}", output)?;
+                    writeln!(&mut out, "{output}")?;
                 } else {
                     writeln!(
                         &mut out,
@@ -129,7 +129,7 @@ where
                     )?;
                     writeln!(&mut out, "{}", serde_json::to_string_pretty(&tx)?)?;
                     writeln!(&mut out, "Signed Transaction (borsh encoded):")?;
-                    writeln!(&mut out, "{}", signed_tx)?;
+                    writeln!(&mut out, "{signed_tx}")?;
                 }
 
                 Ok(())

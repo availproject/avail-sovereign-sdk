@@ -202,5 +202,10 @@ where
 
     input.block = Box::new(f(&ident, &block, &tagged_inputs));
 
+    // Add allow attribute to suppress clippy warnings on generated code
+    input
+        .attrs
+        .push(syn::parse_quote!(#[allow(clippy::unused_unit, unexpected_cfgs)]));
+
     Ok(input.to_token_stream().into())
 }

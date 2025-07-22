@@ -1,6 +1,6 @@
 use sov_bank::{CallMessage, TokenId};
 use sov_modules_api::prelude::arbitrary::{self, Arbitrary};
-use sov_modules_api::{CryptoSpec, PrivateKey, PublicKey, Spec};
+use sov_modules_api::{PrivateKey, PublicKey, Spec};
 
 use super::{
     BankAccount, BankChangeLogEntry, BankMessageGenerator, BankTag, InternalMessageGenError,
@@ -41,11 +41,7 @@ impl<S: Spec> BankMessageGenerator<S> {
             generator_state.get_account_with_tag(BankTag::CanMintById(token_id).into())
         {
             acct.remove_can_mint(token_id);
-            let addr = acct
-                .private_key
-                .pub_key()
-                .credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>()
-                .into();
+            let addr = acct.private_key.pub_key().credential_id().into();
             generator_state.update_account(&addr, acct);
         }
 

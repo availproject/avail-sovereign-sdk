@@ -182,7 +182,7 @@ impl FullNodeBlueprint<Native> for CelestiaNomtDemoRollup<Native> {
         &self,
         rollup_config: &RollupConfig<<Self::Spec as Spec>::Address, Self::DaService>,
     ) -> anyhow::Result<Self::StorageManager> {
-        NomtStorageManager::new(&rollup_config.storage.path)
+        NomtStorageManager::new(rollup_config.storage.clone())
     }
 
     fn create_proof_sender(

@@ -465,9 +465,9 @@ impl Schema {
 
     /// Link a child type to its parent, panicking if the parent type is not in the schema or if the parent type has no more placeholders.
     fn link_child_to_parent(&mut self, parent: ItemId, child: Link) {
-        let idx = self.known_types.get(&parent).unwrap_or_else(|| panic!("Tried to link a child to a parent ({:?}) that the schema doesn't have. This is a bug in a hand-written schema.", parent));
+        let idx = self.known_types.get(&parent).unwrap_or_else(|| panic!("Tried to link a child to a parent ({parent:?}) that the schema doesn't have. This is a bug in a hand-written schema."));
 
-        let remaining_children = *self.under_construction.get(&parent).unwrap_or_else(|| panic!("Tried to link too many children to parent ({:?}). This is a bug in a hand-written schema.", parent));
+        let remaining_children = *self.under_construction.get(&parent).unwrap_or_else(|| panic!("Tried to link too many children to parent ({parent:?}). This is a bug in a hand-written schema."));
         if remaining_children == 1 {
             self.under_construction.remove(&parent);
         } else {
@@ -582,8 +582,7 @@ pub trait SchemaGenerator: Sized + 'static {
         let link = Self::write_schema(schema);
         assert!(
             schema.under_construction.is_empty(),
-            "Schema generation left some types partially constructed. This is a bug in the schema. {:?}",
-            schema
+            "Schema generation left some types partially constructed. This is a bug in the schema. {schema:?}"
         );
         schema.push_root_link(link);
         let templates = Self::get_child_templates(schema);

@@ -108,20 +108,20 @@ mod http_api {
 impl<S: Storage> AccessoryStateReader for AccessoryDelta<S> {}
 impl<S: Storage> AccessoryStateWriter for AccessoryDelta<S> {}
 
-impl<'a, S: Spec> StateReader<User> for GenesisStateAccessor<'a, S> {
+impl<S: Spec> StateReader<User> for GenesisStateAccessor<'_, S> {
     inner_impl_charge_gas_state_infallible_reader!(User);
 }
-impl<'a, S: Spec> StateWriter<User> for GenesisStateAccessor<'a, S> {
+impl<S: Spec> StateWriter<User> for GenesisStateAccessor<'_, S> {
     inner_impl_charge_gas_infallible_state_writer!(User);
 }
-impl<'a, S: Spec> StateReader<Kernel> for GenesisStateAccessor<'a, S> {
+impl<S: Spec> StateReader<Kernel> for GenesisStateAccessor<'_, S> {
     inner_impl_charge_gas_state_infallible_reader!(Kernel);
 }
-impl<'a, S: Spec> StateWriter<Kernel> for GenesisStateAccessor<'a, S> {
+impl<S: Spec> StateWriter<Kernel> for GenesisStateAccessor<'_, S> {
     inner_impl_charge_gas_infallible_state_writer!(Kernel);
 }
 
-impl<'a, S: Spec> AccessoryStateWriter for GenesisStateAccessor<'a, S> {}
+impl<S: Spec> AccessoryStateWriter for GenesisStateAccessor<'_, S> {}
 
 impl<S: Spec> StateReader<User> for StateCheckpoint<S> {
     inner_impl_charge_gas_state_infallible_reader!(User);
@@ -172,7 +172,7 @@ impl<S: Spec, I: StateProvider<S>> AccessoryStateWriter for WorkingSet<S, I> {}
 impl<S: Spec, I: StateProvider<S>> AccessoryStateReader for WorkingSet<S, I> {}
 
 #[cfg(feature = "native")]
-impl<'a, S: Spec> StateReader<Accessory> for AccessoryStateCheckpoint<'a, S> {
+impl<S: Spec> StateReader<Accessory> for AccessoryStateCheckpoint<'_, S> {
     type Error = Infallible;
     fn get(&mut self, key: &SlotKey) -> Result<Option<SlotValue>, Self::Error> {
         Ok(self.checkpoint.delta.get(
@@ -199,7 +199,7 @@ impl<'a, S: Spec> StateReader<Accessory> for AccessoryStateCheckpoint<'a, S> {
 }
 
 #[cfg(feature = "native")]
-impl<'a, S: Spec> AccessoryStateWriter for AccessoryStateCheckpoint<'a, S> {}
+impl<S: Spec> AccessoryStateWriter for AccessoryStateCheckpoint<'_, S> {}
 
 pub mod kernel_state {
     use std::convert::Infallible;
@@ -212,31 +212,31 @@ pub mod kernel_state {
     use crate::state::accessors::BootstrapWorkingSet;
     use crate::{KernelStateAccessor, Spec, StateReader, StateWriter};
 
-    impl<'a, S: Spec> StateReader<Kernel> for BootstrapWorkingSet<'a, S> {
+    impl<S: Spec> StateReader<Kernel> for BootstrapWorkingSet<'_, S> {
         inner_impl_charge_gas_state_infallible_reader!(Kernel);
     }
-    impl<'a, S: Spec> StateReader<User> for BootstrapWorkingSet<'a, S> {
+    impl<S: Spec> StateReader<User> for BootstrapWorkingSet<'_, S> {
         inner_impl_charge_gas_state_infallible_reader!(User);
     }
 
-    impl<'a, S: Spec> StateWriter<Kernel> for BootstrapWorkingSet<'a, S> {
+    impl<S: Spec> StateWriter<Kernel> for BootstrapWorkingSet<'_, S> {
         inner_impl_charge_gas_infallible_state_writer!(Kernel);
     }
-    impl<'a, S: Spec> StateWriter<User> for BootstrapWorkingSet<'a, S> {
+    impl<S: Spec> StateWriter<User> for BootstrapWorkingSet<'_, S> {
         inner_impl_charge_gas_infallible_state_writer!(User);
     }
 
-    impl<'a, S: Spec> StateReader<Kernel> for KernelStateAccessor<'a, S> {
+    impl<S: Spec> StateReader<Kernel> for KernelStateAccessor<'_, S> {
         inner_impl_charge_gas_state_infallible_reader!(Kernel);
     }
-    impl<'a, S: Spec> StateReader<User> for KernelStateAccessor<'a, S> {
+    impl<S: Spec> StateReader<User> for KernelStateAccessor<'_, S> {
         inner_impl_charge_gas_state_infallible_reader!(User);
     }
 
-    impl<'a, S: Spec> StateWriter<Kernel> for KernelStateAccessor<'a, S> {
+    impl<S: Spec> StateWriter<Kernel> for KernelStateAccessor<'_, S> {
         inner_impl_charge_gas_infallible_state_writer!(Kernel);
     }
-    impl<'a, S: Spec> StateWriter<User> for KernelStateAccessor<'a, S> {
+    impl<S: Spec> StateWriter<User> for KernelStateAccessor<'_, S> {
         inner_impl_charge_gas_infallible_state_writer!(User);
     }
 }

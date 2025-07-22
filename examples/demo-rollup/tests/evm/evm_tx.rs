@@ -6,6 +6,7 @@ use sov_mock_da::storable::service::StorableMockDaService;
 use sov_modules_api::execution_mode::Native;
 use sov_modules_api::Spec;
 use sov_modules_macros::config_value;
+use sov_sequencer::preferred::default_ideal_lag_behind_finalized_slot;
 use sov_stf_runner::processes::RollupProverConfig;
 use sov_test_utils::initialize_logging;
 use sov_test_utils::test_rollup::get_appropriate_rollup_prover_config;
@@ -42,7 +43,10 @@ async fn evm_tx_test(
     // temp_dir is hold here os it is not removed during test run
     let test_rollup = evm_test_helper::start_node(rollup_prover_config, finalization_blocks).await;
 
-    test_rollup.da_service.produce_n_blocks_now(10).await?;
+    test_rollup
+        .da_service
+        .produce_n_blocks_now(10 + default_ideal_lag_behind_finalized_slot() as usize)
+        .await?;
     tokio::time::sleep(Duration::from_secs(1)).await;
 
     let (test_client, _) = evm_test_helper::create_test_client(

@@ -22,6 +22,7 @@ pub use transaction::*;
 pub use verifier::StateTransitionVerifier;
 
 use super::optimistic::Attestation;
+use crate::common::RollupHeight;
 use crate::da::{DaSpec, RelevantBlobIters};
 use crate::zk::aggregated_proof::{AggregatedProofPublicData, SerializedAggregatedProof};
 use crate::zk::{StateTransitionPublicData, Zkvm};
@@ -175,6 +176,8 @@ pub struct ApplySlotOutputInner<Root, ChangeSet, BR, PR, Witness> {
     pub batch_receipts: Vec<BR>,
     /// Witness after applying the whole block
     pub witness: Witness,
+    /// The rollup height before applying the changes.
+    pub rollup_height: RollupHeight,
 }
 
 /// The result of applying a slot to current state.

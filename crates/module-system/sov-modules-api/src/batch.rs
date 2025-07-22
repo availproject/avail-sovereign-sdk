@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use sov_rollup_interface::da::DaSpec;
 
 use crate::{
-    Amount, Context, DispatchCall, Gas, Runtime, Spec, StateCheckpoint, TransactionReceipt,
-    TxScratchpad,
+    Amount, Context, DispatchCall, Gas, Runtime, SlotGasMeter, Spec, StateCheckpoint,
+    TransactionReceipt, TxScratchpad,
 };
 
 /// `FullyBakedTx` represents a serialized signed rollup transaction that has been encoded with
@@ -119,12 +121,11 @@ impl SequencerBondForTx {
 }
 
 /// Contains raw transactions obtained from the DA blob.
-
 /// A Batch with its ID.
 #[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 pub struct BatchWithId<S: Spec> {
     /// Batch of transactions.
-    pub batch: Vec<FullyBakedTx>,
+    pub batch: Arc<Vec<FullyBakedTx>>,
     /// The ID of the batch, carried over from the DA layer. This is the hash of the blob which contained the batch.
     pub id: [u8; 32],
     /// The address of the sequencer that submitted the batch.
@@ -133,7 +134,7 @@ pub struct BatchWithId<S: Spec> {
 
 impl<S: Spec> BatchWithId<S> {
     /// Construct a new batch with the given ID.
-    pub fn new(batch: Vec<FullyBakedTx>, id: [u8; 32], sequencer_address: S::Address) -> Self {
+    pub fn new(batch: Arc<Vec<FullyBakedTx>>, id: [u8; 32], sequencer_address: S::Address) -> Self {
         Self {
             batch,
             id,
@@ -152,9 +153,9 @@ impl<S: Spec> BatchWithId<S> {
 #[serde(rename_all = "snake_case")]
 pub enum BlobData<S: Spec> {
     /// Batch of transactions.
-    Batch((Vec<FullyBakedTx>, S::Address)),
+    Batch((Arc<Vec<FullyBakedTx>>, S::Address)),
     /// Emergency Registration
-    EmergencyRegistration(RawTx),
+    EmergencyRegistration(FullyBakedTx),
     /// Aggregated proof posted on the DA.
     Proof((Vec<u8>, S::Address)),
 }
@@ -189,7 +190,7 @@ pub enum BlobDataWithId<S: Spec, B> {
     /// Emergency Registration
     EmergencyRegistration {
         /// The registration transaction
-        tx: RawTx,
+        tx: FullyBakedTx,
         /// The id of the blob on the DA layer
         id: [u8; 32],
     },
@@ -252,23 +253,51 @@ pub struct ProvisionalSequencerOutcome<S: Spec> {
     pub execution_status: MaybeExecuted<S>,
 }
 
+/// The reason a transaction was rejected by the sequencer due to insufficient funds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
+pub enum OutOfFundsReason<S: Spec> {
+    /// The gas calculation overflowed.
+    #[error("Overflow: Unable to calculate gas value for max_tx_check_costs")]
+    TxGasOverflow,
+    /// The sequencer doesn't have sufficient bond to cover the cost of checking the transaction - either because the gas price is very high
+    /// of the sequencer bond is too low.
+    #[error("The sequencer did not have sufficient funds to cover tx authentication checks, sequencer bond is {sequencer_bond}, but the cost of checking the transaction is {max_tx_check_value}")]
+    SequencerBondTooLow {
+        #[allow(missing_docs)]
+        sequencer_bond: Amount,
+        #[allow(missing_docs)]
+        max_tx_check_value: Amount,
+    },
+    /// The slot gas limit has been exhausted.
+    #[error("The slot gas limit has been exhausted, max_tx_check_gas is {max_tx_check_gas}, remaining_slot_gas is {remaining_slot_gas}")]
+    SlotGasLimitExhausted {
+        #[allow(missing_docs)]
+        max_tx_check_gas: <S as Spec>::Gas,
+        #[allow(missing_docs)]
+        remaining_slot_gas: <S as Spec>::Gas,
+    },
+    /// The sequencer ran out of gas.
+    #[error("The sequencer did not have sufficient funds to cover tx authentication: {0}")]
+    SequencerOutOfGasForAuthentication(String),
+}
+
 /// A transaction that may or may not have been executed
 pub enum MaybeExecuted<S: Spec> {
     /// The execution result from the tx
     Executed(TransactionReceipt<S>),
     /// The transactions wasn't executed because the sequencer ran out of funds
-    SequencerOutOfFunds,
+    SequencerOutOfFunds(OutOfFundsReason<S>),
 }
 
 impl<S: Spec> ProvisionalSequencerOutcome<S> {
     /// A convenient constructor for provisionally penalizing the sequencer and indicating
     /// that the sequencer has run out of funds.
     #[must_use]
-    pub fn out_of_funds(penalty: Amount) -> Self {
+    pub fn out_of_funds(penalty: Amount, reason: OutOfFundsReason<S>) -> Self {
         Self {
             reward: Amount::ZERO,
             penalty,
-            execution_status: MaybeExecuted::SequencerOutOfFunds,
+            execution_status: MaybeExecuted::SequencerOutOfFunds(reason),
         }
     }
 
@@ -307,6 +336,8 @@ pub trait InjectedControlFlow<S: Spec> {
         &self,
         provisional_outcome: ProvisionalSequencerOutcome<S>,
         dirty_scratchpad: TxScratchpad<S, StateCheckpoint<S>>,
+        slot_gas_meter_before_tx: &SlotGasMeter<S>,
+        gas_used: &<S as Spec>::Gas,
     ) -> (StateCheckpoint<S>, TxControlFlow<TransactionReceipt<S>>);
 }
 
@@ -341,13 +372,15 @@ impl<S: Spec> InjectedControlFlow<S> for NoOpControlFlow {
         &self,
         provisional_outcome: ProvisionalSequencerOutcome<S>,
         dirty_scratchpad: TxScratchpad<S, StateCheckpoint<S>>,
+        _slot_gas_meter_before_tx: &SlotGasMeter<S>,
+        _gas_used: &<S as Spec>::Gas,
     ) -> (StateCheckpoint<S>, TxControlFlow<TransactionReceipt<S>>) {
         match provisional_outcome.execution_status {
             MaybeExecuted::Executed(receipt) => (
                 dirty_scratchpad.commit(),
                 TxControlFlow::ContinueProcessing(receipt),
             ),
-            MaybeExecuted::SequencerOutOfFunds => {
+            MaybeExecuted::SequencerOutOfFunds(_) => {
                 (dirty_scratchpad.commit(), TxControlFlow::IgnoreTx)
             }
         }
@@ -363,7 +396,8 @@ pub struct NoOpControlFlow;
 
 pub struct IterableBatchWithId<S: Spec, CF: InjectedControlFlow<S>> {
     /// Batch of transactions.
-    pub batch: std::vec::IntoIter<FullyBakedTx>,
+    batch: Arc<Vec<FullyBakedTx>>,
+    offset: usize,
     /// The ID of the batch, carried over from the DA layer. This is the hash of the blob which contained the batch.
     pub id: [u8; 32],
     /// The address of the sequencer that submitted the batch.
@@ -373,10 +407,18 @@ pub struct IterableBatchWithId<S: Spec, CF: InjectedControlFlow<S>> {
 }
 
 impl<S: Spec, CF: InjectedControlFlow<S>> IterableBatchWithId<S, CF> {
+    /// Remaining transactions in the batch.
+    pub fn remaining(&self) -> usize {
+        self.batch.len().saturating_sub(self.offset)
+    }
+}
+
+impl<S: Spec, CF: InjectedControlFlow<S>> IterableBatchWithId<S, CF> {
     /// Create a new `IterableBatchWithId` from a `BatchWithId`.
     pub fn new(batch_with_id: BatchWithId<S>, cf: CF) -> Self {
         Self {
-            batch: batch_with_id.batch.into_iter(),
+            batch: batch_with_id.batch,
+            offset: 0,
             id: batch_with_id.id,
             sequencer_address: batch_with_id.sequencer_address,
             cf,
@@ -385,10 +427,17 @@ impl<S: Spec, CF: InjectedControlFlow<S>> IterableBatchWithId<S, CF> {
 }
 
 impl<S: Spec, CF: InjectedControlFlow<S> + Clone> Iterator for IterableBatchWithId<S, CF> {
+    // TODO: Consider skipping this clone by adding a lifetime parameter
     type Item = (FullyBakedTx, CF);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.batch.next().map(|tx| (tx, self.cf.clone()))
+        let tx = self.batch.get(self.offset).cloned();
+        if let Some(tx) = tx {
+            self.offset += 1;
+            Some((tx, self.cf.clone()))
+        } else {
+            None
+        }
     }
 }
 
@@ -432,12 +481,12 @@ pub enum RejectReason {
 
 impl<S: Spec> BlobData<S> {
     /// Batch variant constructor.
-    pub fn new_batch(txs: Vec<FullyBakedTx>, sequencer_address: S::Address) -> Self {
+    pub fn new_batch(txs: Arc<Vec<FullyBakedTx>>, sequencer_address: S::Address) -> Self {
         BlobData::Batch((txs, sequencer_address))
     }
 
     /// Emergency Registration variant constructor.
-    pub fn new_emergency_registration(tx: RawTx) -> Self {
+    pub fn new_emergency_registration(tx: FullyBakedTx) -> Self {
         BlobData::EmergencyRegistration(tx)
     }
 
@@ -524,4 +573,27 @@ pub struct BatchSequencerReceipt<S: Spec> {
     pub gas_used: S::Gas,
     /// The sequencer outcome for this batch.
     pub outcome: BatchSequencerOutcome,
+}
+
+#[test]
+fn test_iterable_batch_with_id_remaining() {
+    use sov_mock_da::MockDaSpec;
+    use sov_mock_zkvm::MockZkvm;
+
+    use crate::default_spec::DefaultSpec;
+    use crate::execution_mode::Native;
+    type TestSpec = DefaultSpec<MockDaSpec, MockZkvm, MockZkvm, Native>;
+
+    let batch = Arc::new(vec![FullyBakedTx::new(vec![]), FullyBakedTx::new(vec![])]);
+    let batch_with_id = BatchWithId::<TestSpec>::new(batch, [0; 32], [0; 28].into());
+    let mut batch_with_id = IterableBatchWithId::new(batch_with_id, NoOpControlFlow);
+    assert_eq!(batch_with_id.remaining(), 2);
+    batch_with_id.next();
+    assert_eq!(batch_with_id.remaining(), 1);
+    assert!(batch_with_id.next().is_some());
+    assert_eq!(batch_with_id.remaining(), 0);
+    assert!(batch_with_id.next().is_none());
+    assert_eq!(batch_with_id.remaining(), 0);
+    assert!(batch_with_id.next().is_none());
+    assert_eq!(batch_with_id.remaining(), 0);
 }

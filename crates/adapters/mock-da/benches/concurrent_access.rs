@@ -16,8 +16,8 @@ const READERS_COUNT: usize = 10;
 ///  - Sequencer: Periodical batch submission: 1 write() accessor + data input
 ///  - ZK Manager: Periodical proof submission: 1 write() accessor + data input
 ///  - Runner and DA Sync: [`READERS_COUNT`] call `get_block_at` and `get_head_block_header()`
-///      Note: Readers setup is deliberately aggressive to bring the worst case performance.
-///            The real case is more modest: there's a couple of readers, and they read closer to head, sequentially.
+///    Note: Readers setup is deliberately aggressive to bring the worst case performance.
+///    The real case is more modest: there's a couple of readers, and they read closer to head, sequentially.
 fn bench_storable_mock_da_service(c: &mut Criterion) {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
 
@@ -29,10 +29,7 @@ fn bench_storable_mock_da_service(c: &mut Criterion) {
     let path = temp.path().join("mock-da.sqlite");
 
     let original_blocks = 1000;
-    println!(
-        "Setting up MockDA and wait for {} blocks to be produced",
-        original_blocks
-    );
+    println!("Setting up MockDA and wait for {original_blocks} blocks to be produced");
     let (da_service, handles) = rt.block_on(async {
         let da_service = StorableMockDaService::from_config(
             MockDaConfig {
@@ -86,8 +83,7 @@ fn bench_storable_mock_da_service(c: &mut Criterion) {
     // Wait fill up
     let medium_blocks = 5000;
     println!(
-        "Going to wait for {} blocks to be produced for another set of measurements",
-        medium_blocks
+        "Going to wait for {medium_blocks} blocks to be produced for another set of measurements"
     );
     let head = rt.block_on(async {
         #[allow(unused_assignments)]

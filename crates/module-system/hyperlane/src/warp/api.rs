@@ -61,8 +61,7 @@ impl<S: Spec> Warp<S> {
                 )
                 .unwrap_infallible()
                 .ok_or(errors::internal_server_error_response_500(format!(
-                    "Domain {} was enrolled in route {} but router for domain {} not found",
-                    domain, route, domain
+                    "Domain {domain} was enrolled in route {route} but router for domain {domain} not found"
                 )))?;
             routers.push(RemoteRouter {
                 domain,

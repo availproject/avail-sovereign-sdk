@@ -73,7 +73,7 @@ async fn test_validator_announces_itself() {
     // wait for the first finalized block
     for i in 0..DEFAULT_FINALIZATION_BLOCKS * 30 {
         let events = next_slot_events(&rollup.api_client, &mut slot_subscription).await;
-        println!("ROUND {}, events: {:?}", i, events);
+        println!("ROUND {i}, events: {events:?}");
         if let Some(process_event) = find_event(&events, "Mailbox/ValidatorAnnouncement") {
             assert_eq!(
                 process_event["validator_announcement"]["address"],
@@ -427,7 +427,7 @@ async fn test_warp_transfer_back_and_forth_with_evm_counterparty(
         EVM_DOMAIN
     );
     let mut token_addr_on_counterparty = [0; 32];
-    token_addr_on_counterparty[32 - addr.as_bytes().len()..].copy_from_slice(addr.as_bytes());
+    token_addr_on_counterparty[32 - addr.len()..].copy_from_slice(addr.as_bytes());
     let token_addr_on_counterparty = HexString(token_addr_on_counterparty);
 
     // register warp route for nativeETH

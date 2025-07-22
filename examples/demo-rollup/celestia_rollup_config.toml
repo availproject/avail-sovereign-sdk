@@ -7,6 +7,14 @@ celestia_rpc_address = "http://127.0.0.1:26658"
 max_celestia_response_body_size = 104_857_600
 # The maximum time to wait for a response to an RPC query against Celestia node. Defaults to 60 seconds.
 celestia_rpc_timeout_seconds = 60
+# Minimal time to wait before reattempting to request to celestia node.
+# backoff_min_delay_ms = 200
+# Maximal time between reattempting to request to the celestia node.
+# backoff_max_delay_ms = 200
+# Number of requests attempted on the celestia node before returning an error.
+# backoff_max_times = 60
+# Exponential factor for reattempting failed requests
+# backoff_factor = 2.0
 
 [storage]
 # The path to the rollup's data directory. Paths that do not begin with `/` are interpreted as relative paths.
@@ -18,7 +26,7 @@ path = "demo_data"
 genesis_height = 3
 # Block time for celestia is configured in `docker/run-validator.sh` and we try to set this one to be lower,
 # So status is updated more frequently.
-da_polling_interval_ms = 200
+da_polling_interval_ms = 500
 
 [runner.http_config]
 bind_host = "127.0.0.1"
@@ -47,7 +55,8 @@ max_number_of_transitions_in_db = 100
 max_number_of_transitions_in_memory = 30
 
 [sequencer]
-blob_processing_timeout_secs = 300
+# This number should be <= than the total number of attempts by exponential builder of celestia adapter
+blob_processing_timeout_secs = 600
 max_batch_size_bytes = 1048576
 max_concurrent_blobs = 128
 max_allowed_node_distance_behind = 10
@@ -62,3 +71,4 @@ disable_state_root_consistency_checks = true
 # "None" - Shutdown the sequencer instead of attempting recovery (default)
 # "TryToSave" - Attempt to recover by flushing batches and catching up with the chain
 recovery_strategy = "TryToSave"
+batch_execution_time_limit_millis = 12000 # Do no more than 12 seconds worth of work per batch, even if the DA layer isn't producing blocks regularly

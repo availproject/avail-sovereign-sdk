@@ -48,7 +48,7 @@ where
         }
     }
 
-    #[allow(clippy::type_complexity)]
+    #[allow(clippy::type_complexity, clippy::too_many_arguments)]
     #[cfg_attr(feature = "bench", sov_modules_api::cycle_tracker)]
     pub(crate) fn process_proof(
         &self,

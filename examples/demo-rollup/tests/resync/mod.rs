@@ -2,7 +2,7 @@
 use std::collections::HashSet;
 use std::env;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{bail, Context};
@@ -18,11 +18,11 @@ use sov_modules_api::{OperatingMode, RawTx, Runtime, TxHash};
 use sov_modules_rollup_blueprint::logging::default_rust_log_value;
 use sov_risc0_adapter::crypto::private_key::Risc0PrivateKey;
 use sov_stf_runner::processes::RollupProverConfig;
+use sov_test_utils::logging::LogCollector;
 use sov_test_utils::test_rollup::{read_private_key, RollupBuilder, TestRollup};
 use sov_test_utils::{default_test_signed_transaction, TEST_DEFAULT_MOCK_DA_PERIODIC_PRODUCING};
-use sov_value_setter::CallMessage;
 use tempfile::TempDir;
-use tracing::{Event, Level, Subscriber};
+use tracing::Level;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{registry, EnvFilter, Layer};
 
@@ -33,12 +33,7 @@ const ROLLUP_SYNC_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 const TX_PROCESSING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 const ROLLUP_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-struct LogCollector {
-    records: Arc<Mutex<Vec<(Level, String)>>>,
-}
-
-fn initialize_logging_for_resync(records: Arc<Mutex<Vec<(Level, String)>>>, with_stdout: bool) {
-    let collector = LogCollector { records };
+fn initialize_logging_for_resync(collector: LogCollector, with_stdout: bool) {
     let subscriber = registry().with(collector);
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
@@ -60,41 +55,20 @@ fn initialize_logging_for_resync(records: Arc<Mutex<Vec<(Level, String)>>>, with
     }
 }
 
-impl<S> Layer<S> for LogCollector
-where
-    S: Subscriber,
-{
-    fn on_event(&self, event: &Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
-        let level = *event.metadata().level();
-        if level <= Level::WARN {
-            let mut message = String::new();
-            let mut visitor = MessageVisitor(&mut message);
-            event.record(&mut visitor);
-            self.records.lock().unwrap().push((level, message));
-        }
-    }
-}
-
-struct MessageVisitor<'a>(&'a mut String);
-
-impl<'a> tracing::field::Visit for MessageVisitor<'a> {
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        if field.name() == "message" {
-            self.0.push_str(&format!("{:?}", value));
-        }
-    }
-}
-
 // Must be pre-sorted
-const VAL_AT_SLOT: [(u64, u32); 5] = [(10, 1234), (20, 5678), (40, 1357), (80, 2468), (100, 8888)];
-const CHECK_TRANSACTION_VALUE: u32 = 11111;
+const VAL_AT_SLOT: [(u64, u64); 5] = [(10, 10), (20, 15), (40, 20), (80, 25), (100, 30)];
+const CHECK_TRANSACTION_VALUE: u64 = 13;
 
 const DA_SLOTS_TO_GENERATE: u64 = 100;
 const FINALIZATION_SLOTS: u32 = 5;
 
-fn tx_set_value(key: Risc0PrivateKey, value: u32, nonce: u64) -> RawTx {
+fn tx_set_value_for_check(key: Risc0PrivateKey, value: u64, nonce: u64) -> RawTx {
     let msg: RuntimeCall<DemoRollupSpec> =
-        RuntimeCall::ValueSetter(CallMessage::SetValue { value, gas: None });
+        RuntimeCall::SyntheticLoad(sov_synthetic_load::CallMessage::ReadAndSetHeavyState {
+            number_of_new_values: value,
+            max_heavy_state_size: value,
+            salt: 10,
+        });
     let tx = default_test_signed_transaction::<DemoRuntime<DemoRollupSpec>, DemoRollupSpec>(
         &key,
         &msg,
@@ -106,16 +80,17 @@ fn tx_set_value(key: Risc0PrivateKey, value: u32, nonce: u64) -> RawTx {
 
 async fn check_value(client: &demo_stf_json_client::Client, expected: u64) {
     let response = client
-        .value_setter_value_get_state_value(None, None)
+        .synthetic_load_heavy_state_get_state_value(None, None)
         .await
         .unwrap();
+
     match &response.data {
         RuntimeAnyJsonValue::Object(inner) => {
             let state_value = inner.get("value").unwrap();
-            let state_number = state_value.as_number().unwrap().as_u64().unwrap();
-            assert_eq!(state_number, expected);
+            let heavy_vec = state_value.as_array().unwrap();
+            assert_eq!(heavy_vec.len(), expected as usize);
         }
-        _ => panic!("Getting ValueSetter state value returned unexpected JSON shape."),
+        _ => panic!("Getting SyntheticLoad state value returned unexpected JSON shape."),
     }
 }
 
@@ -170,7 +145,7 @@ async fn test_generate_mockda_dataset_for_resync() -> anyhow::Result<()> {
         if let Some((height, value)) = known_values_to_set.peek() {
             if current_slot_number == *height {
                 known_values_to_set.next();
-                let tx = tx_set_value(tx_signer_key.clone(), *value, current_slot_number);
+                let tx = tx_set_value_for_check(tx_signer_key.clone(), *value, current_slot_number);
                 test_rollup
                     .api_client
                     .accept_tx(&sov_api_spec::types::AcceptTxBody {
@@ -178,6 +153,7 @@ async fn test_generate_mockda_dataset_for_resync() -> anyhow::Result<()> {
                     })
                     .await
                     .unwrap();
+                test_rollup.force_close_batch().await.unwrap();
             }
         }
         if current_slot_number >= DA_SLOTS_TO_GENERATE + FINALIZATION_SLOTS as u64 {
@@ -240,8 +216,8 @@ async fn test_rollup_resync() -> anyhow::Result<()> {
     // the sequencer time to resync safely.
     std::env::set_var("SOV_TEST_CONST_OVERRIDE_DEFERRED_SLOTS_COUNT", "400");
 
-    let records = Arc::new(Mutex::new(Vec::new()));
-    initialize_logging_for_resync(records.clone(), false); // Set to true to see logs
+    let collector = LogCollector::new(Level::WARN);
+    initialize_logging_for_resync(collector.clone(), false); // Set to true to see logs
 
     let rollup_storage_path = Arc::new(TempDir::new_in("tests/resync/data/")?);
 
@@ -288,13 +264,16 @@ async fn test_rollup_resync() -> anyhow::Result<()> {
 
     // Check the rollup did not emit any warnings or errors at any point during the tests
     let known_acceptable_logs = [
+        // TODO - investigate slow postgres queries (optimisation item in
+        // https://github.com/Sovereign-Labs/sovereign-sdk-wip/issues/2800)
+        (Level::WARN, "slow statement: execution time exceeded alert threshold".to_string()),
         // TODO - investigate: https://github.com/Sovereign-Labs/sovereign-sdk-wip/issues/2978
         (Level::WARN, "Received error updating target height, stopping background task".to_string()),
         // This is expected for the second resync: since we have batches in the sequencer DB, we
         // are indeed causing a delay for users
         (Level::WARN, "The sequencer must pause because the node has lagged behind the DA blockchain. This might lead to a brief downtime for users.".to_string()),
         // This is due to finalized but recent enough proof blobs not being pruned for a while (see
-        // the TODO inside `subsequent_completed_blobs` in the preferred sequencer db mod.rs). This
+        // the TODO inside `prune_sequencer_db` in the preferred sequencer db mod.rs). This
         // causes the sequencer to resubmit proof blobs for earlier slots, which are no longer
         // valid. This is likely related to https://github.com/Sovereign-Labs/sovereign-sdk-wip/issues/1878
         // (sending already-submitted proofs at a later height).
@@ -308,7 +287,7 @@ async fn test_rollup_resync() -> anyhow::Result<()> {
     ];
 
     let mut recorded_errors_warnings =
-        HashSet::<(Level, String)>::from_iter(records.lock().unwrap().clone().iter().cloned());
+        HashSet::<(Level, String)>::from_iter(collector.records().iter().cloned());
     recorded_errors_warnings.retain(|e| !known_acceptable_logs.contains(e));
     // We could've checked `.is_empty`, but in case of failure, we will see errors immediately.
     assert_eq!(HashSet::<(Level, String)>::new(), recorded_errors_warnings);
@@ -365,7 +344,7 @@ async fn sync_rollup_with_path(
         if let Some((height, value)) = known_values_that_have_been_set.peek() {
             if current_slot_number == *height + INCLUSION_DELAY_SLACK {
                 known_values_that_have_been_set.next();
-                check_value(&demo_client, *value as u64).await;
+                check_value(&demo_client, *value).await;
             }
         }
         if current_slot_number >= DA_SLOTS_TO_GENERATE + FINALIZATION_SLOTS as u64 {
@@ -390,7 +369,7 @@ async fn sync_rollup_with_path(
     // Ensure the rollup can still accept transactions
     let tx_signer_key =
         read_private_key::<DemoRollupSpec>("tx_signer_private_key.json").private_key;
-    let tx = tx_set_value(tx_signer_key.clone(), CHECK_TRANSACTION_VALUE, nonce_to_use);
+    let tx = tx_set_value_for_check(tx_signer_key.clone(), CHECK_TRANSACTION_VALUE, nonce_to_use);
     let accept_tx = test_rollup
         .api_client
         .accept_tx(&sov_api_spec::types::AcceptTxBody {
@@ -423,7 +402,7 @@ async fn sync_rollup_with_path(
     })
     .await
     .context("Finalizing the transaction failed")??;
-    check_value(&demo_client, CHECK_TRANSACTION_VALUE as u64).await;
+    check_value(&demo_client, CHECK_TRANSACTION_VALUE).await;
 
     let TestRollup {
         shutdown_sender,

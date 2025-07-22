@@ -15,7 +15,7 @@ use sov_mock_da::{
 };
 use sov_mock_zkvm::MockZkvm;
 use sov_modules_api::provable_height_tracker::InfiniteHeight;
-use sov_rollup_interface::common::{HexHash, SlotNumber};
+use sov_rollup_interface::common::{HexHash, RollupHeight, SlotNumber};
 use sov_rollup_interface::da::{DaSpec, RelevantBlobIters};
 use sov_rollup_interface::node::ledger_api::LedgerStateProvider;
 use sov_rollup_interface::node::SyncStatus;
@@ -77,6 +77,7 @@ impl<InnerVm: Zkvm, OuterVm: Zkvm, Da: DaSpec> StateTransitionFunction<InnerVm, 
                 inner: (),
             }],
             witness: (),
+            rollup_height: RollupHeight::new(0),
         }
     }
 }
@@ -238,8 +239,7 @@ async fn test_reorg_happened_correct_block_returned() -> anyhow::Result<()> {
             assert_eq!(
                 expected_pre_state_root,
                 state_manager.get_state_root(),
-                "Expected (left) state root does not match actual(right) set in StateManager. All state roots: {:?}",
-                post_state_roots);
+                "Expected (left) state root does not match actual(right) set in StateManager. All state roots: {post_state_roots:?}");
 
             let returned_storage_root = prover_storage.get_latest_root_hash()?;
             let received_update_info = state_update_receiver.borrow().clone();
@@ -1002,7 +1002,8 @@ async fn setup_storage_manager(
     let data_to_commit: SlotCommit<_, TestBatchReceiptContents, TestTxReceiptContents> =
         SlotCommit::new(genesis_block);
     let mut ledger_change_set = ledger_db.materialize_slot(data_to_commit, state_root.as_ref())?;
-    let finalized_slot_changes = ledger_db.materialize_latest_finalize_slot(SlotNumber::GENESIS)?;
+    let finalized_slot_changes =
+        ledger_db.materialize_latest_finalize_slot(SlotNumber::GENESIS, SlotNumber::GENESIS)?;
     ledger_change_set.merge(finalized_slot_changes);
 
     storage_manager.save_change_set(&genesis_header, change_set, ledger_change_set)?;
@@ -1144,8 +1145,7 @@ where
     for (height, seen_blocks) in &state_manager.seen_on_height {
         assert!(
             !seen_blocks.is_empty(),
-            "empty seen blocks at height: {}. Dirty!",
-            height
+            "empty seen blocks at height: {height}. Dirty!"
         );
         for seen_hash in seen_blocks {
             assert_eq!(
@@ -1169,10 +1169,7 @@ where
                     height, state.block_header.prev_hash()
                 );
             } else {
-                panic!(
-                    "Block {} from seen_on_height is missing in state_on_block",
-                    seen_hash
-                );
+                panic!("Block {seen_hash} from seen_on_height is missing in state_on_block");
             }
         }
     }
@@ -1199,9 +1196,7 @@ where
     let seen_on_height_size = state_manager.seen_on_height.len();
     assert!(
         seen_on_height_size <= finality,
-        "Size of seen_on_height={} is more than finality={}",
-        seen_on_height_size,
-        finality
+        "Size of seen_on_height={seen_on_height_size} is more than finality={finality}"
     );
 
     let earliest_seen_height = state_manager.get_earliest_seen_height();

@@ -48,13 +48,15 @@ pub async fn materialize_simple_ledger_db_data(
         inner: 0,
     });
 
+    let slot_num = ledger_db.get_next_items_numbers()?.slot_number;
     let mut ledger_data = ledger_db.materialize_slot(slot, b"state-root")?;
 
-    ledger_data.merge(
-        ledger_db.materialize_aggregated_proof(SerializedAggregatedProof {
+    ledger_data.merge(ledger_db.materialize_aggregated_proof(
+        slot_num,
+        SerializedAggregatedProof {
             raw_aggregated_proof: b"aggregated-proof".to_vec(),
-        })?,
-    );
+        },
+    )?);
 
     Ok(ledger_data)
 }
@@ -158,11 +160,14 @@ pub fn materialize_complex_ledger_db_data(ledger_db: &LedgerDb) -> anyhow::Resul
         ledger_data.merge(ledger_db.materialize_slot(slot, state_root.as_bytes())?);
     }
 
-    ledger_data.merge(
-        ledger_db.materialize_aggregated_proof(SerializedAggregatedProof {
+    let slot_num = ledger_db.get_next_items_numbers()?.slot_number;
+
+    ledger_data.merge(ledger_db.materialize_aggregated_proof(
+        slot_num,
+        SerializedAggregatedProof {
             raw_aggregated_proof: b"aggregated-proof".to_vec(),
-        })?,
-    );
+        },
+    )?);
 
     Ok(ledger_data)
 }
@@ -244,7 +249,7 @@ impl LedgerTestService {
             .listening()
             .await
             .ok_or(anyhow::anyhow!("Failed to bind"))?;
-        let axum_client = sov_api_spec::Client::new(&format!("http://{}", axum_addr));
+        let axum_client = sov_api_spec::Client::new(&format!("http://{axum_addr}"));
 
         Ok(Self {
             _dir: dir,

@@ -57,14 +57,14 @@ fn store_genesis_config_json_schema<T: schemars::JsonSchema>(filename: &str) -> 
     let schema = schema_for!(T);
     let schema_string = serde_json::to_string_pretty(&schema)?;
 
-    let mut file = File::create(format!("genesis-schemas/{}", filename))?;
+    let mut file = File::create(format!("genesis-schemas/{filename}"))?;
     file.write_all(schema_string.as_bytes())?;
     file.write_all(b"\n")?;
     Ok(())
 }
 
 fn store_module_call_json_schema<M: ModuleCallJsonSchema>(filename: &str) -> io::Result<()> {
-    let mut file = File::create(format!("schemas/{}", filename))?;
+    let mut file = File::create(format!("schemas/{filename}"))?;
     file.write_all(M::json_schema().as_bytes())?;
     file.write_all(b"\n")?;
     Ok(())

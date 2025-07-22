@@ -82,15 +82,11 @@ mod tests {
         for block_time in block_times {
             assert!(
                 block_time >= start,
-                "Block time {:?} is before start {:?} of the da service",
-                block_time,
-                start
+                "Block time {block_time:?} is before start {start:?} of the da service"
             );
             assert!(
                 block_time <= end,
-                "Block time {:?} is after last producing block {:?}",
-                block_time,
-                end
+                "Block time {block_time:?} is after last producing block {end:?}"
             );
         }
 

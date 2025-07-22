@@ -102,8 +102,9 @@ async fn test_save_aggregated_proof() {
             raw_aggregated_proof,
         };
 
+        let slot_num = ledger_db.get_next_items_numbers().unwrap().slot_number;
         let proof_change_set = ledger_db
-            .materialize_aggregated_proof(agg_proof.clone())
+            .materialize_aggregated_proof(slot_num, agg_proof.clone())
             .unwrap();
         storage_manager.commit(proof_change_set);
 

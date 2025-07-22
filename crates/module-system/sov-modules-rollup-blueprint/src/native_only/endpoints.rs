@@ -127,9 +127,7 @@ fn merge_specs(
     } = from;
 
     for (path, item) in from_paths.into_iter() {
-        into.paths
-            .paths
-            .insert(format!("{}{}", sub_path, path), item);
+        into.paths.paths.insert(format!("{sub_path}{path}"), item);
     }
 
     into.tags.extend_from_slice(&tags);

@@ -263,6 +263,7 @@ jobs:
       RISC0_DEV_MODE: "true"
       SP1_PROVER: "mock"
       RUST_BACKTRACE: 1
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: namespacelabs/nscloud-cache-action@v1
@@ -294,7 +295,9 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-      - run: make test
+      - run: make test-all
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   doctests:
     name: doctests
@@ -347,6 +350,8 @@ jobs:
         run: cargo generate-lockfile
       - name: cargo llvm-cov
         run: make coverage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v3
         with:
@@ -595,7 +600,7 @@ jobs:
         with:
           repository: "Sovereign-Labs/sovereign-sdk-web3-js"
           path: "examples/demo-rollup/web3-js-sdk"
-          ref: "ca58c0d11bd81016d19042dfd49adf02b820b5ea"
+          ref: "df475bbddb5e1faed63532c0a901f289b3b2e481"
           ssh-key: |
             ${{ secrets.SOV_SDK_WEB3_JS_ACCESS_TOKEN }}
       - name: Run web3-js SDK tests against demo-rollup

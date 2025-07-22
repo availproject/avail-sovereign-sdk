@@ -12,7 +12,6 @@ use sov_test_utils::runtime::genesis::zk::config::HighLevelZkGenesisConfig;
 use sov_test_utils::runtime::sov_paymaster::{
     self, PayeePolicy, PayerGenesisConfig, PaymasterConfig, PaymasterPolicyInitializer, SafeVec,
 };
-use sov_test_utils::runtime::ValueSetterConfig;
 use sov_transaction_generator::generators::basic::BasicModuleRef;
 use sov_transaction_generator::{Distribution, MessageValidity};
 
@@ -188,7 +187,7 @@ impl BenchCLICustomArgs {
         seed: u128,
         module_distribution: Distribution<BasicModuleRef<S, RT>>,
         validity_distribution: Distribution<MessageValidity>,
-        value_setter_admin: <<S as Spec>::CryptoSpec as CryptoSpec>::PrivateKey,
+        passed_admin: <<S as Spec>::CryptoSpec as CryptoSpec>::PrivateKey,
     ) -> Benchmark<S> {
         let risc0_host_args = mock_da_risc0_host_args();
         let risc0_commitment = Risc0Host::from_args(&*risc0_host_args).code_commitment();
@@ -212,10 +211,14 @@ impl BenchCLICustomArgs {
             .available_gas_balance = quarter_max;
 
         let sequencer = genesis_config.initial_sequencer.clone();
-        let payer = genesis_config.additional_accounts.first().unwrap().clone();
+        let payer = genesis_config
+            .additional_accounts()
+            .first()
+            .unwrap()
+            .clone();
 
-        let mut admin = genesis_config.additional_accounts.get(1).unwrap().clone();
-        admin.private_key = value_setter_admin;
+        let mut admin = genesis_config.additional_accounts().get(1).unwrap().clone();
+        admin.private_key = passed_admin;
 
         let genesis_config = GenesisConfig::from_minimal_config(
             genesis_config.into(),
@@ -239,9 +242,6 @@ impl BenchCLICustomArgs {
                 .as_ref()
                 .try_into()
                 .unwrap(),
-            },
-            ValueSetterConfig {
-                admin: admin.address(),
             },
             AccessPatternGenesisConfig {
                 admin: admin.address(),

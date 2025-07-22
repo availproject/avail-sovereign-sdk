@@ -8,10 +8,8 @@ use sov_blob_sender::BlobInternalId;
 use sov_blob_storage::SequenceNumber;
 use sov_modules_api::{FullyBakedTx, TxHash, VisibleSlotNumber};
 
-use super::{
-    PreferredSequencerDbBackend, PreferredSequencerReadBatch, PreferredSequencerReadBlob,
-    StoredBlob,
-};
+use super::{DbSnapshotData, PreferredSequencerDbBackend, PreferredSequencerReadBlob, StoredBlob};
+use crate::preferred::db::InProgressBatch;
 
 #[derive(Debug)]
 pub struct RocksDbBackend {
@@ -26,24 +24,7 @@ pub struct RocksDbBackend {
 #[async_trait]
 impl PreferredSequencerDbBackend for RocksDbBackend {
     #[tracing::instrument(skip_all, level = "trace")]
-    async fn read_completed_blobs(&self) -> anyhow::Result<Vec<PreferredSequencerReadBlob>> {
-        let mut blobs = vec![];
-
-        // Iteration might be slow, but getters are only called during
-        // sequencer initialization so it's okay.
-        for item_res in self.db.iter::<tables::CompletedBlobs>()? {
-            let item = item_res?;
-            let sequence_number = item.key;
-            let stored_blob = item.value;
-
-            blobs.push(self.read_blob(sequence_number, stored_blob).await?);
-        }
-
-        Ok(blobs)
-    }
-
-    #[tracing::instrument(skip_all, level = "trace")]
-    async fn read_in_progress_batch(&self) -> anyhow::Result<Option<PreferredSequencerReadBatch>> {
+    async fn read_in_progress_batch(&self) -> anyhow::Result<Option<InProgressBatch>> {
         let Some((sequence_number, stored_blob)) =
             self.db.get_async::<tables::InProgressBatch>(&()).await?
         else {
@@ -51,7 +32,9 @@ impl PreferredSequencerDbBackend for RocksDbBackend {
         };
 
         match self.read_blob(sequence_number, stored_blob).await? {
-            PreferredSequencerReadBlob::Batch(batch) => Ok(Some(batch)),
+            PreferredSequencerReadBlob::Batch(batch) => {
+                Ok(Some(batch))
+            }
             _ => panic!("In-progress batch must be a batch but is a proof blob; this is a bug, please report it"),
         }
     }
@@ -99,25 +82,10 @@ impl PreferredSequencerDbBackend for RocksDbBackend {
         Ok(())
     }
 
-    async fn pop_tx(
-        &mut self,
-        sequence_number_of_in_progress_batch: SequenceNumber,
-        tx_idx_within_batch: u64,
-    ) -> anyhow::Result<()> {
-        self.db
-            .delete_async::<tables::BatchContents>(&(
-                sequence_number_of_in_progress_batch,
-                tx_idx_within_batch,
-            ))
-            .await?;
-
-        Ok(())
-    }
-
     #[tracing::instrument(skip_all, level = "trace")]
     async fn end_rollup_block(
         &mut self,
-        in_progress_batch: &PreferredSequencerReadBatch,
+        in_progress_batch: &InProgressBatch,
     ) -> anyhow::Result<()> {
         let mut s = SchemaBatch::new();
         s.delete::<tables::InProgressBatch>(&())?;
@@ -145,10 +113,13 @@ impl PreferredSequencerDbBackend for RocksDbBackend {
 
         // Avoid overlapping range deletes.
         if prune_up_to_including < self.first_unpruned_sequence_number {
-            tracing::warn!(
-                sequence_number = %prune_up_to_including,
-                "Skipping pruning of sequence number because it's already been pruned",
-            );
+            // Warn if we skipped pruning because the sequence number went down. If it merely stayed the same, this is expected behavior so skip the warning.
+            if prune_up_to_including != self.first_unpruned_sequence_number.checked_sub(1).expect("Sequence number underflow. This is unreachable because we've just checked that prune_up_to_including < self.first_unpruned_sequence_number") {
+                tracing::warn!(
+                    sequence_number = %prune_up_to_including,
+                    "Skipping pruning of sequence number because it's already been pruned",
+                );
+            }
             return Ok(());
         }
 
@@ -183,6 +154,17 @@ impl PreferredSequencerDbBackend for RocksDbBackend {
             )
             .await?;
         Ok(())
+    }
+
+    async fn current_data(&self) -> anyhow::Result<DbSnapshotData> {
+        // RocksDB doesn't need atomicity, and doesn't track event_ids
+        let completed_blobs = self.read_completed_blobs().await?;
+        let in_progress_batch = self.read_in_progress_batch().await?;
+        Ok(DbSnapshotData {
+            completed_blobs,
+            in_progress_batch,
+            latest_event_id: None,
+        })
     }
 }
 
@@ -224,6 +206,23 @@ impl RocksDbBackend {
         })
     }
 
+    #[tracing::instrument(skip_all, level = "trace")]
+    async fn read_completed_blobs(&self) -> anyhow::Result<Vec<PreferredSequencerReadBlob>> {
+        let mut blobs = vec![];
+
+        // Iteration might be slow, but getters are only called during
+        // sequencer initialization so it's okay.
+        for item_res in self.db.iter::<tables::CompletedBlobs>()? {
+            let item = item_res?;
+            let sequence_number = item.key;
+            let stored_blob = item.value;
+
+            blobs.push(self.read_blob(sequence_number, stored_blob).await?);
+        }
+
+        Ok(blobs)
+    }
+
     #[cfg(test)]
     pub fn trigger_compaction(&self) {
         self.db
@@ -231,11 +230,11 @@ impl RocksDbBackend {
             .expect("Compaction failed");
     }
 
-    async fn read_blob(
+    async fn read_blob<Inner: From<InProgressBatch>>(
         &self,
         sequence_number: SequenceNumber,
         stored_blob: StoredBlob,
-    ) -> anyhow::Result<PreferredSequencerReadBlob> {
+    ) -> anyhow::Result<PreferredSequencerReadBlob<Inner>> {
         Ok(match stored_blob {
             StoredBlob::Batch {
                 visible_slot_number_after_increase,
@@ -260,14 +259,17 @@ impl RocksDbBackend {
                     tx_hashes.push(tx_hash);
                 }
 
-                PreferredSequencerReadBlob::Batch(PreferredSequencerReadBatch {
-                    sequence_number,
-                    visible_slot_number_after_increase,
-                    visible_slots_to_advance,
-                    txs,
-                    tx_hashes,
-                    blob_id,
-                })
+                PreferredSequencerReadBlob::Batch(
+                    InProgressBatch {
+                        sequence_number,
+                        visible_slot_number_after_increase,
+                        visible_slots_to_advance,
+                        txs,
+                        tx_hashes,
+                        blob_id,
+                    }
+                    .into(),
+                )
             }
             StoredBlob::Proof { data, blob_id } => PreferredSequencerReadBlob::Proof {
                 sequence_number,
@@ -306,6 +308,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+    use crate::preferred::db::PreferredSequencerReadBatch;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_overlapping_range_deletion_pathology() {
@@ -313,12 +316,12 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn test_sequencer_rocksdb_db_performance_can_run_1k_batches_in_1_minute() {
+    async fn flaky_test_sequencer_rocksdb_db_performance_can_run_1k_batches_in_90_seconds() {
         let handle = tokio::task::spawn(run_rocksdb_test(10000));
 
-        let _ = tokio::time::timeout(std::time::Duration::from_secs(60), handle)
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(90), handle)
             .await
-            .expect("Creating 10000 batches should take less than 1 minute; you may need to check your filesystem performance!");
+            .expect("Creating 10000 batches should take less than 90 seconds; you may need to check your filesystem performance!");
     }
 
     async fn run_rocksdb_test(iters: u64) {

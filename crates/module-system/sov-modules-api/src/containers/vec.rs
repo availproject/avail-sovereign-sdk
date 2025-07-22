@@ -338,7 +338,7 @@ where
     _phantom: std::marker::PhantomData<(N, V, Codec)>,
 }
 
-impl<'a, 'ws, N, V, Codec, W> Iterator for StateVecIter<'a, 'ws, N, V, Codec, W>
+impl<N, V, Codec, W> Iterator for StateVecIter<'_, '_, N, V, Codec, W>
 where
     Codec: StateCodec,
     Codec::ValueCodec: StateItemCodec<V> + StateItemCodec<u64>,
@@ -363,7 +363,7 @@ where
     }
 }
 
-impl<'a, 'ws, N, V, Codec, W> ExactSizeIterator for StateVecIter<'a, 'ws, N, V, Codec, W>
+impl<N, V, Codec, W> ExactSizeIterator for StateVecIter<'_, '_, N, V, Codec, W>
 where
     Codec: StateCodec,
     Codec::ValueCodec: StateItemCodec<V> + StateItemCodec<u64>,
@@ -376,7 +376,7 @@ where
     }
 }
 
-impl<'a, 'ws, N, V, Codec, W> FusedIterator for StateVecIter<'a, 'ws, N, V, Codec, W>
+impl<N, V, Codec, W> FusedIterator for StateVecIter<'_, '_, N, V, Codec, W>
 where
     Codec: StateCodec,
     Codec::ValueCodec: StateItemCodec<V> + StateItemCodec<u64>,
@@ -386,7 +386,7 @@ where
 {
 }
 
-impl<'a, 'ws, N, V, Codec, W> DoubleEndedIterator for StateVecIter<'a, 'ws, N, V, Codec, W>
+impl<N, V, Codec, W> DoubleEndedIterator for StateVecIter<'_, '_, N, V, Codec, W>
 where
     Codec: StateCodec,
     Codec::ValueCodec: StateItemCodec<V> + StateItemCodec<u64>,

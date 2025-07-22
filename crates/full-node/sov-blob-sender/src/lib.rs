@@ -37,6 +37,9 @@ pub type BlobInternalId = u128;
 
 const LEDGER_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
+/// If a blob is not published within this number of retries, the rollup will exit.
+pub const MAX_NB_OF_BLOB_SUBMISSION_RETRIES: u8 = 3;
+
 /// See [`BlobInternalId`].
 pub fn new_blob_id() -> BlobInternalId {
     uuid::Uuid::now_v7().as_u128()
@@ -162,6 +165,11 @@ where
     pub fn nb_of_concurrent_blob_submissions(&self) -> usize {
         self.nb_of_concurrent_blob_submissions
             .load(Ordering::Relaxed)
+    }
+
+    /// Returns a handle to the (atomic) number of blob submissions currently in flight.
+    pub fn nb_of_in_flight_blobs_handle(&self) -> Arc<AtomicUsize> {
+        self.nb_of_concurrent_blob_submissions.clone()
     }
 
     fn inc_nb_of_concurrent_blob_submissions(&self) {
@@ -358,7 +366,7 @@ type BlobReceiptFut<Da> = oneshot::Receiver<
 pub trait FinalizationManager: Clone + Send + Sync + 'static {
     async fn is_blob_finalized(
         &self,
-        blob_hash: [u8; 32],
+        blob_hash: HexHash,
         blob_id: BlobInternalId,
     ) -> anyhow::Result<Option<bool>>;
 }
@@ -367,12 +375,12 @@ pub trait FinalizationManager: Clone + Send + Sync + 'static {
 impl FinalizationManager for LedgerDb {
     async fn is_blob_finalized(
         &self,
-        blob_hash: [u8; 32],
+        blob_hash: HexHash,
         _blob_id: BlobInternalId,
     ) -> anyhow::Result<Option<bool>> {
         let Some(batch) = self
             .get_batch_by_hash::<(), (), RuntimeEventResponse<IgnoreEvent>>(
-                &blob_hash,
+                &blob_hash.0,
                 QueryMode::Compact,
             )
             .await?
@@ -428,7 +436,7 @@ impl<Da: DaService, FM: FinalizationManager> TaskState<Da, FM> {
 
     async fn is_blob_finalized_or_err(
         &self,
-        blob_hash: [u8; 32],
+        blob_hash: HexHash,
         blob_id: BlobInternalId,
         state: &BlobProcessingState<Da::Spec>,
     ) -> anyhow::Result<Option<bool>> {
@@ -446,15 +454,21 @@ impl<Da: DaService, FM: FinalizationManager> TaskState<Da, FM> {
         is_finalized
     }
 
-    async fn check_timeout(&self, start_time: SystemTime, blob_hash: [u8; 32]) -> bool {
+    async fn check_timeout(
+        &self,
+        start_time: SystemTime,
+        blob_hash: HexHash,
+        da_tx_id: &<<Da as DaService>::Spec as DaSpec>::TransactionId,
+    ) -> bool {
         let elapsed = match start_time.elapsed() {
             Ok(elapsed) => elapsed,
             Err(err) => {
                 tracing::error!(
-                    blob_hash = %HexHash::new(blob_hash),
+                    %blob_hash,
+                    ?da_tx_id,
                     error = ?err,
                     timer = ?start_time,
-                    "BlobSender: unable to get elapsed time for blob submission. Shutting down.",
+                    "BlobSender: unable to get elapsed time for blob submission.",
                 );
                 return true;
             }
@@ -462,7 +476,8 @@ impl<Da: DaService, FM: FinalizationManager> TaskState<Da, FM> {
 
         if elapsed > self.blob_processing_timeout {
             tracing::error!(
-                blob_hash = %HexHash::new(blob_hash),
+                %blob_hash,
+                ?da_tx_id,
                 timer = ?start_time,
                 blob_processing_timeout = ?self.blob_processing_timeout,
                 ?elapsed,
@@ -482,6 +497,8 @@ impl<Da: DaService, FM: FinalizationManager> TaskState<Da, FM> {
         latest_known_processing_state: BlobProcessingState<Da::Spec>,
     ) {
         let mut blob_state = latest_known_processing_state;
+
+        let mut nb_of_retries_attempted = 0;
 
         loop {
             trace!(?blob_state, ?blob_id, "Tracking blob submission state");
@@ -512,12 +529,17 @@ impl<Da: DaService, FM: FinalizationManager> TaskState<Da, FM> {
                         }
                         err => {
                             tracing::error!(
-                                "BlobSender: unable to send blob: {blob_state:?}, error: {err:?}, blob_id: {blob_id}. Shutting down."
+                                %blob_id,
+                                error = ?err,
+                                ?blob_state,
+                                "BlobSender: unable to send blob. Shutting down."
                             );
                             let _ = self.shutdown_sender.send(());
                             return;
                         }
                     }
+
+                    nb_of_retries_attempted += 1;
                 }
                 BlobProcessingState::Published { receipt } => {
                     if self
@@ -540,11 +562,23 @@ impl<Da: DaService, FM: FinalizationManager> TaskState<Da, FM> {
 
                     let timer = SystemTime::now();
                     loop {
-                        let blob_hash = receipt.blob_hash.into();
-                        if self.check_timeout(timer, blob_hash).await {
-                            // Shutdown if the timeout is exceeded.
-                            let _ = self.shutdown_sender.send(());
-                            return;
+                        let blob_hash = receipt.blob_hash;
+                        let da_tx_id = &receipt.da_transaction_id;
+                        if self.check_timeout(timer, blob_hash, da_tx_id).await {
+                            if nb_of_retries_attempted >= MAX_NB_OF_BLOB_SUBMISSION_RETRIES {
+                                tracing::error!(
+                                    nb_of_retries_attempted,
+                                    MAX_NB_OF_BLOB_SUBMISSION_RETRIES,
+                                    ?da_tx_id,
+                                    %blob_hash,
+                                    "Shutting down the rollup. Blob submission failed."
+                                );
+                                let _ = self.shutdown_sender.send(());
+                                return;
+                            }
+
+                            blob_state = BlobProcessingState::MustSubmit;
+                            break;
                         }
 
                         let finality_status = match self
@@ -595,11 +629,7 @@ impl<Da: DaService, FM: FinalizationManager> TaskState<Da, FM> {
 
                     loop {
                         let finality_status = match self
-                            .is_blob_finalized_or_err(
-                                receipt.blob_hash.into(),
-                                blob_id,
-                                &blob_state,
-                            )
+                            .is_blob_finalized_or_err(receipt.blob_hash, blob_id, &blob_state)
                             .await
                         {
                             Ok(finality_status) => finality_status,

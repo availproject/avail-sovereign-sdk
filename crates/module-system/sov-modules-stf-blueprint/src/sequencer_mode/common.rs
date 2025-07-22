@@ -5,7 +5,7 @@ use sov_modules_api::{
     StateProvider, TransactionReceipt, TxScratchpad, WorkingSet, *,
 };
 use sov_rollup_interface::TxHash;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use super::registered::IncrementalBatchReceipt;
 use crate::stf_blueprint::convert_to_runtime_events;
@@ -130,10 +130,10 @@ pub(crate) fn create_tx_receipt<S: Spec>(
     skipped: SkippedTxContents<S>,
     raw_tx_hash: TxHash,
 ) -> TransactionReceipt<S> {
-    warn!(
+    info!(
         error = %skipped.error,
         raw_tx_hash = %raw_tx_hash,
-        "An error occurred while processing a transaction. The transaction was not executed. The sequencer was penalized.",
+        "An error occurred while processing a transaction. The transaction was not executed and skipped",
     );
 
     TransactionReceipt {

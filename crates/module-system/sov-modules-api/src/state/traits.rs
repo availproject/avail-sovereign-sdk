@@ -11,6 +11,7 @@ use sov_state::{
     User,
 };
 use thiserror::Error;
+use tracing::{enabled, instrument, Level, Span};
 
 use super::accessors::seal::UniversalStateAccessor;
 use super::accessors::{BorshSerializedSize, TempCache};
@@ -131,7 +132,6 @@ pub trait PerBlockCache {
     fn put_cached<T: 'static + Send + Sync + BorshSerializedSize>(&mut self, value: T);
     /// Deletes a value from the cache.
     fn delete_cached<T: 'static + Send + Sync>(&mut self);
-
     /// Adds all writes from another cache to this one.
     fn update_cache_with(&mut self, other: TempCache);
 }
@@ -605,6 +605,7 @@ fn charge_write<Accessor: UniversalStateAccessor + GasMeter>(
     Ok(())
 }
 
+#[instrument(name = "state::get", skip_all, level = Level::TRACE, fields(key = %key, value_size_bytes))]
 pub(crate) fn get_inner<Accessor: UniversalStateAccessor + GasMeter>(
     accessor: &mut Accessor,
     namespace: Namespace,
@@ -612,9 +613,17 @@ pub(crate) fn get_inner<Accessor: UniversalStateAccessor + GasMeter>(
 ) -> Result<Option<SlotValue>, GasMeteringError<<Accessor::Spec as Spec>::Gas>> {
     charge_read(accessor, namespace, key)?;
 
-    Ok(accessor.get_value(namespace, key))
+    let value = accessor.get_value(namespace, key);
+
+    if enabled!(Level::TRACE) {
+        let size = value.as_ref().map(SlotValue::size).unwrap_or(0);
+        Span::current().record("value_size_bytes", size);
+    }
+
+    Ok(value)
 }
 
+#[instrument(name = "state::set", skip_all, level = Level::TRACE, fields(key = %key, value_size_bytes = value.size()))]
 pub(crate) fn set_inner<Accessor: UniversalStateAccessor + GasMeter>(
     accessor: &mut Accessor,
     namespace: Namespace,
@@ -628,6 +637,7 @@ pub(crate) fn set_inner<Accessor: UniversalStateAccessor + GasMeter>(
     Ok(())
 }
 
+#[instrument(name = "state::delete", skip_all, level = Level::TRACE, fields(key = %key, value_size_bytes))]
 pub(crate) fn delete_inner<Accessor: UniversalStateAccessor + GasMeter>(
     accessor: &mut Accessor,
     namespace: Namespace,
@@ -635,6 +645,12 @@ pub(crate) fn delete_inner<Accessor: UniversalStateAccessor + GasMeter>(
 ) -> Result<(), GasMeteringError<<Accessor::Spec as Spec>::Gas>> {
     // Doing a delete is the same as doing a write with a size of 0
     charge_write(accessor, namespace, key, 0)?;
+
+    // avoid an extra size calculation
+    if enabled!(Level::TRACE) {
+        let size = accessor.get_size(namespace, key).unwrap_or(0);
+        Span::current().record("value_size_bytes", size);
+    }
 
     accessor.delete_value(namespace, key);
 

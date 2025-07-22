@@ -15,8 +15,9 @@ pub use config::{MonitoringConfig, TelegrafSocketConfig};
 pub use gas_constant_estimation::{GasConstantTracker, GAS_CONSTANTS};
 pub use tracker::{
     init_metrics_tracker, timestamp, BatchMetrics, BatchOutcome, HttpMetrics, RunnerMetrics,
-    SlotProcessingMetrics, TransactionEffect, TransactionProcessingMetrics,
-    UserSpaceSlotProcessingMetrics, ZkCircuit, ZkProvingTime, ZkVmExecutionChunk,
+    RunnerProcessStfChangesMetrics, SlotProcessingMetrics, TransactionEffect,
+    TransactionProcessingMetrics, UserSpaceSlotProcessingMetrics, ZkCircuit, ZkProvingTime,
+    ZkVmExecutionChunk,
 };
 
 pub(crate) type SerializableMetric = Box<dyn Metric>;
@@ -130,6 +131,7 @@ mod tests {
             stf_transition_time: std::time::Duration::from_millis(1003),
             extract_blobs_time: std::time::Duration::from_millis(1004),
             extraction_proof_time: std::time::Duration::from_millis(1005),
+            processing_changes_time: std::time::Duration::from_millis(1006),
         });
         let finish = timestamp();
 
@@ -145,7 +147,7 @@ mod tests {
             let timestamp = u128::from_str(
                 metric
                     .split(' ')
-                    .last()
+                    .next_back()
                     .expect("Timestamp not found for metric"),
             )
             .expect("Failed to parse timestamp");
@@ -217,8 +219,7 @@ mod tests {
 
         assert!(
             sent_metric.starts_with("my_custom_metric my_tag=3 my_value=120 "),
-            "Metrics {} does not contain expected prefix",
-            sent_metric
+            "Metrics {sent_metric} does not contain expected prefix"
         );
 
         Ok(())

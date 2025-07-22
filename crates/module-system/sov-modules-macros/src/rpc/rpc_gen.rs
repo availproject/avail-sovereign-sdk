@@ -124,7 +124,7 @@ impl RpcImplBlock {
             (Some(ws), Some(ref method_ws_type)) if ws != method_ws_type => {
                 return Err(syn::Error::new_spanned(
                     method.name(),
-                    format!("All `#[rpc_method]` annotated methods must have the same state checkpoint type. Found `{:?}` and `{:?}`", ws, method_ws_type),
+                    format!("All `#[rpc_method]` annotated methods must have the same state checkpoint type. Found `{ws:?}` and `{method_ws_type:?}`"),
                 ));
             }
             // The method has no working set argument; do nothing.

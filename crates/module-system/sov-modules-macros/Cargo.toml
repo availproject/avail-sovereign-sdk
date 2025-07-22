@@ -40,21 +40,22 @@ sov-metrics = { workspace = true, optional = true }
 
 
 [dev-dependencies]
+sov-modules-macros = { path = ".", features = ["native"] }
+sov-modules-api = { workspace = true, features = ["native", "test-utils"] }
 borsh = { workspace = true }
 jsonrpsee = { workspace = true, features = ["http-client", "macros", "server"] }
 schemars = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
-tempfile = { workspace = true }
 trybuild = "1.0"
 tokio = { workspace = true }
 
 sov-address = { workspace = true }
-sov-modules-api = { workspace = true, features = ["native", "test-utils"] }
-sov-rollup-interface = { workspace = true }
+
+sov-rollup-interface = { workspace = true, features = ["native"] }
 sov-state = { workspace = true, features = ["native", "test-utils"] }
 sov-bank = { workspace = true, features = ["native"] }
-sov-modules-macros = { workspace = true, features = ["native"] }
+
 sov-metrics = { workspace = true }
 sov-test-utils = { workspace = true }
 
@@ -71,6 +72,15 @@ native = [
 	"sov-state/native",
 	"sov-address/native",
 	"sov-metrics?/native"
+]
+arbitrary = [
+	"sov-modules-macros/arbitrary",
+	"sov-address/arbitrary",
+	"sov-bank/arbitrary",
+	"sov-modules-api/arbitrary",
+	"sov-rollup-interface/arbitrary",
+	"sov-state/arbitrary",
+	"sov-test-utils/arbitrary"
 ]
 bench = [
 	"sov-metrics",

@@ -89,10 +89,8 @@ impl<L: LinkingScheme> Ty<L> {
 impl Ty<IndexLinking> {
     /// Fills the next available placeholder in the type with the given link, panicking if no placeholder is available.
     pub fn fill_next_placholder(&mut self, child: Link) {
-        let err_msg = format!(
-            "Called `fill_next_placholder` on a type with no placeholders: {:?}",
-            self
-        );
+        let err_msg =
+            format!("Called `fill_next_placholder` on a type with no placeholders: {self:?}");
         match self {
             Ty::Enum(e) => {
                 e.variants

@@ -271,10 +271,7 @@ mod tests {
 
         assert!(
             difference <= Amount::new(1),
-            "Precision loss too high: expected {}, got {}, diff {}",
-            expected,
-            result,
-            difference
+            "Precision loss too high: expected {expected}, got {result}, diff {difference}"
         );
     }
 
@@ -289,8 +286,7 @@ mod tests {
 
         assert_eq!(
             result, expected,
-            "Remainder propagation failed: expected {}, got {}",
-            expected, result
+            "Remainder propagation failed: expected {expected}, got {result}"
         );
     }
 
@@ -337,14 +333,13 @@ mod tests {
         for (fee, input, expected, msg) in cases {
             match expected {
                 Ok(expected_value) => {
-                    assert_eq!(fee.apply(input).unwrap(), expected_value, "{}", msg);
+                    assert_eq!(fee.apply(input).unwrap(), expected_value, "{msg}");
                 }
                 Err(_) => {
                     assert_eq!(
                         fee.apply(input).unwrap_err(),
                         PriorityFeeApplyOverflowError,
-                        "{}",
-                        msg
+                        "{msg}"
                     );
                 }
             }

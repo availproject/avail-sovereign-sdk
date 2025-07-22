@@ -15,8 +15,6 @@ workspace = true
 anyhow = { workspace = true }
 borsh = { workspace = true, features = ["derive"] }
 serde = { workspace = true, features = ["alloc", "derive"] }
-alloy-chains = "=0.1.27"
-alloy-primitives = "=0.7.7"
 strum = { workspace = true, features = ["derive"] }
 schemars = { workspace = true }
 
@@ -37,7 +35,7 @@ sov-prover-incentives = { workspace = true }
 sov-rollup-interface = { workspace = true }
 sov-sequencer-registry = { workspace = true }
 sov-state = { workspace = true }
-sov-value-setter = { workspace = true }
+sov-synthetic-load = { workspace = true }
 sov-kernels = { workspace = true }
 sov-rollup-apis = { workspace = true, optional = true }
 sov-test-modules = { workspace = true }
@@ -62,7 +60,7 @@ native = [
     "sov-rollup-interface/native",
     "sov-sequencer-registry/native",
     "sov-state/native",
-    "sov-value-setter/native",
+    "sov-synthetic-load/native",
     "sov-blob-storage/native",
     "sov-rollup-apis",
     "sov-paymaster/native",

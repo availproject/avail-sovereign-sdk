@@ -47,7 +47,7 @@ async fn test_enroll_remote_router() {
     let api_response = runner
         .query_api_unwrap_data::<Vec<RemoteRouter>>(
             &ApiPath::query_module("warp")
-                .with_custom_api_path(&format!("route/{}/routers", warp_route_id)),
+                .with_custom_api_path(&format!("route/{warp_route_id}/routers")),
             &client,
         )
         .await;
@@ -65,7 +65,7 @@ async fn test_unenroll_remote_router() {
     let api_response = runner
         .query_api_unwrap_data::<Vec<RemoteRouter>>(
             &ApiPath::query_module("warp")
-                .with_custom_api_path(&format!("route/{}/routers", warp_route_id)),
+                .with_custom_api_path(&format!("route/{warp_route_id}/routers")),
             &client,
         )
         .await;
@@ -97,7 +97,7 @@ async fn test_unenroll_remote_router() {
     let api_response = runner
         .query_api_unwrap_data::<Vec<RemoteRouter>>(
             &ApiPath::query_module("warp")
-                .with_custom_api_path(&format!("route/{}/routers", warp_route_id)),
+                .with_custom_api_path(&format!("route/{warp_route_id}/routers")),
             &client,
         )
         .await;
@@ -300,8 +300,7 @@ fn test_enroll_remote_routers_on_registration() {
                             && domain == &expected_domain
                             && router == &expected_router
                     )),
-                    "Router enrolled event for domain {} should be emitted",
-                    expected_domain
+                    "Router enrolled event for domain {expected_domain} should be emitted"
                 );
             }
         }),

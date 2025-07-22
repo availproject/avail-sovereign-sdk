@@ -13,12 +13,15 @@ fn main() {
         let elf = r#"
             pub const ROLLUP_PATH: &str = "";
             pub const MOCK_DA_PATH: &str = "";
+            pub const MOCK_DA_ELF: &[u8] = b"";
+            pub const ROLLUP_ELF: &[u8] = b"";
+
         "#;
 
         std::fs::write(methods_path, elf).expect("Failed to write mock rollup elf");
     } else {
         let guest_pkg_to_options = get_guest_options();
-        risc0_build::embed_method_metadata_with_options(guest_pkg_to_options);
+        risc0_build::embed_methods_with_options(guest_pkg_to_options);
     }
 }
 
@@ -42,12 +45,10 @@ fn get_guest_options() -> HashMap<&'static str, risc0_build::GuestOptions> {
     if cfg!(feature = "bincode") {
         features.push("bincode".to_string());
     }
-    guest_pkg_to_options.insert(
-        "sov-demo-prover-guest-mock-risc0",
-        risc0_build::GuestOptions {
-            features,
-            ..Default::default()
-        },
-    );
+    let guest_options = risc0_build::GuestOptionsBuilder::default()
+        .features(features)
+        .build()
+        .unwrap();
+    guest_pkg_to_options.insert("sov-demo-prover-guest-mock-risc0", guest_options);
     guest_pkg_to_options
 }

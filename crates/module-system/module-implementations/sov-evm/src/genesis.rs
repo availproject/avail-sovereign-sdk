@@ -124,7 +124,7 @@ where
                 },
             );
 
-            if acc.code.len() > 0 {
+            if !acc.code.is_empty() {
                 evm_db.insert_code(acc.code_hash, acc.code.clone());
             }
         }

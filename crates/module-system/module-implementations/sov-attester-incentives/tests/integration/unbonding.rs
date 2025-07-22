@@ -171,7 +171,7 @@ fn try_unbond_too_early() {
                         "Transaction reverted, but with unexpected reason"
                     );
                 }
-                unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+                unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
             };
         }),
     });
@@ -243,7 +243,7 @@ fn try_skip_two_phase_unbonding() {
                         "Transaction reverted, but with unexpected reason"
                     );
                 }
-                unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+                unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
             };
         }),
     });
@@ -307,7 +307,7 @@ fn try_bond_while_unbonding() {
                         "Transaction reverted, but with unexpected reason"
                     );
                 }
-                unexpected => panic!("Expected transaction to revert, but got: {:?}", unexpected),
+                unexpected => panic!("Expected transaction to revert, but got: {unexpected:?}"),
             };
         }),
     };

@@ -41,7 +41,7 @@ where
         .map_err(|e| fatal_deserialization_error::<Accessor, S, _>(raw_tx, e, state))?;
     let hash = TxHash::new(tx.hash().into());
     let signer = tx.recover_signer().ok_or(AuthenticationError::FatalError(
-        FatalError::SigVerificationFailed(format!("Invalid ethereum signature: tx hash {}", hash)),
+        FatalError::SigVerificationFailed(format!("Invalid ethereum signature: tx hash {hash}")),
         hash,
     ))?;
 
@@ -219,10 +219,26 @@ where
         capabilities::AuthenticationOutput<S, Self::Decodable>,
         capabilities::UnregisteredAuthenticationError,
     > {
+        let Self::Input::Standard(input) = borsh::from_slice(&batch.tx.data)
+            .map_err(|_| UnregisteredAuthenticationError::InvalidAuthenticationDiscriminant)?
+        else {
+            return Err(UnregisteredAuthenticationError::InvalidAuthenticationDiscriminant);
+        };
+
         let (tx_and_raw_hash, auth_data, runtime_call) =
-            sov_modules_api::capabilities::RollupAuthenticator::<S, Rt>::authenticate_unregistered(
-                batch, state,
-            )?;
+            sov_modules_api::capabilities::authenticate::<_, S, Rt>(
+                &input.data,
+                &Rt::CHAIN_HASH,
+                state,
+            )
+            .map_err(|e| match e {
+                AuthenticationError::FatalError(err, hash) => {
+                    UnregisteredAuthenticationError::FatalError(err, hash)
+                }
+                AuthenticationError::OutOfGas(err) => {
+                    UnregisteredAuthenticationError::OutOfGas(err)
+                }
+            })?;
 
         if Rt::allow_unregistered_tx(&runtime_call) {
             Ok((

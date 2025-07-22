@@ -39,7 +39,7 @@ impl CommitFlag {
         let base_path = base_path.as_ref();
         Self {
             file_path: base_path.join(FLAG_FILE_NAME),
-            temp_file_path: base_path.join(format!("{}.tmp", FLAG_FILE_NAME)),
+            temp_file_path: base_path.join(format!("{FLAG_FILE_NAME}.tmp")),
         }
     }
 
@@ -162,7 +162,7 @@ mod tests {
         contents.clear();
         f.read_to_end(&mut contents).unwrap();
         assert_eq!(contents, borsh::to_vec(&in_progress_msg).unwrap());
-        assert!(!dir.path().join(format!("{}.tmp", FLAG_FILE_NAME)).exists());
+        assert!(!dir.path().join(format!("{FLAG_FILE_NAME}.tmp")).exists());
         drop(f);
 
         // 3. Write Completed
@@ -173,7 +173,7 @@ mod tests {
         contents.clear();
         f.read_to_end(&mut contents).unwrap();
         assert_eq!(contents, borsh::to_vec(&CommitStatus::Completed).unwrap());
-        assert!(!dir.path().join(format!("{}.tmp", FLAG_FILE_NAME)).exists());
+        assert!(!dir.path().join(format!("{FLAG_FILE_NAME}.tmp")).exists());
     }
 
     #[test]

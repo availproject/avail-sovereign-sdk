@@ -25,7 +25,7 @@ pub fn test_genesis_paths(operating_mode: OperatingMode) -> GenesisPaths {
     paths.chain_state_genesis_path = match operating_mode {
         OperatingMode::Zk => dir.as_ref().join("chain_state_zk.json"),
         OperatingMode::Optimistic => dir.as_ref().join("chain_state_op.json"),
-        OperatingMode::Operator => todo!("Operator mode not implemented yet"),
+        OperatingMode::Operator => dir.as_ref().join("chain_state_operator.json"),
     };
 
     paths

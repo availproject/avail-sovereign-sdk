@@ -87,13 +87,13 @@ impl NodeClient {
 
     /// Simplified constructor for testing.
     pub async fn new_at_localhost(port: u16) -> anyhow::Result<Self> {
-        let api_url = format!("http://127.0.0.1:{}", port);
+        let api_url = format!("http://127.0.0.1:{port}");
         Self::new(&api_url).await
     }
 
     /// Simplified constructor for testing.
     pub fn new_at_localhost_unchecked(port: u16) -> Self {
-        let api_url = format!("http://127.0.0.1:{}", port);
+        let api_url = format!("http://127.0.0.1:{port}");
         Self::new_unchecked(&api_url)
     }
 
@@ -104,7 +104,7 @@ impl NodeClient {
         &self,
         pub_key: &<S::CryptoSpec as CryptoSpec>::PublicKey,
     ) -> anyhow::Result<u64> {
-        let credential_id = pub_key.credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>();
+        let credential_id = pub_key.credential_id();
         let nonce_url = format!(
             "{}/modules/nonces/state/nonces/items/{}",
             self.base_url, credential_id
@@ -197,7 +197,7 @@ impl NodeClient {
         rollup_height: Option<u64>,
     ) -> anyhow::Result<Amount> {
         let height_param: String = rollup_height
-            .map(|h| format!("?rollup_height={}", h))
+            .map(|h| format!("?rollup_height={h}"))
             .unwrap_or_default();
         let balance_url = format!(
             "{}/modules/bank/tokens/{}/balances/{}{}",
@@ -302,6 +302,12 @@ impl NodeClient {
         Ok(self.http_client.get(url).send().await?.text().await?)
     }
 
+    /// HTTP POST to the given endpoint, returning plain text.
+    pub async fn http_post(&self, url: &str) -> anyhow::Result<String> {
+        let url = format!("{}{}", self.base_url, url);
+        Ok(self.http_client.post(url).send().await?.text().await?)
+    }
+
     /// Requests if given DA address is allowed sequencer.
     /// Returns balance as well.
     pub async fn sequencer_rollup_address<S: sov_modules_api::Spec, Da: DaSpec>(
@@ -347,7 +353,7 @@ async fn check_if_rollup_has_standard_modules(
     client: &reqwest::Client,
     base_url: &str,
 ) -> anyhow::Result<bool> {
-    let url = format!("{}/modules", base_url);
+    let url = format!("{base_url}/modules");
     let response = client.get(&url).send().await?;
     let response_json: ResponseObject<ModulesList> = response.json().await?;
     let module_response = response_json

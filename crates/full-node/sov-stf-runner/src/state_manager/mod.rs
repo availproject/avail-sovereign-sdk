@@ -10,6 +10,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sov_db::ledger_db::{LedgerDb, SlotCommit};
 use sov_db::schema::{DeltaReader, SchemaBatch};
+use sov_metrics::RunnerProcessStfChangesMetrics;
 use sov_rollup_interface::common::SlotNumber;
 use sov_rollup_interface::da::{BlockHeaderTrait, DaSpec};
 use sov_rollup_interface::node::da::{DaService, SlotData};
@@ -110,6 +111,7 @@ where
     >,
     Sm::StfState: Clone,
 {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         storage_manager: Sm,
         ledger_db: LedgerDb,
@@ -261,6 +263,7 @@ where
         slot_commit: SlotCommit<S, B, T>,
         aggregated_proofs: Vec<SerializedAggregatedProof>,
     ) -> anyhow::Result<()> {
+        let start = std::time::Instant::now();
         if !self.is_initialized {
             anyhow::bail!(
                 "StateManager wasn't initialized. Please call `.startup()` method before using"
@@ -276,11 +279,12 @@ where
                 block_header.display()
             );
         }
+        let aggregated_proofs_count = aggregated_proofs.len();
         tracing::debug!(
             %slot_number,
             current_state_root = hex::encode(self.get_state_root().as_ref()),
             next_state_root = hex::encode(new_state_root.as_ref()),
-            aggregated_proofs = aggregated_proofs.len(),
+            aggregated_proofs = aggregated_proofs_count,
             "Saving changes after applying slot"
         );
 
@@ -311,13 +315,18 @@ where
             .insert(block_header.hash());
         // ----
 
+        let processing_finalized_transitions_start = std::time::Instant::now();
         let (last_finalized_header, finalized_transitions) =
             self.process_finalized_state_transitions(da_service).await?;
+        let processing_finalized_transitions_time =
+            processing_finalized_transitions_start.elapsed();
         tracing::trace!(
             finalized_transitions = finalized_transitions.len(),
+            time = ?processing_finalized_transitions_time,
             "Processed finalized transitions"
         );
 
+        let ledger_materialization_start = std::time::Instant::now();
         let mut ledger_change_set = self
             .ledger_db
             .materialize_slot(slot_commit, new_state_root.as_ref())?;
@@ -335,7 +344,7 @@ where
         );
         let last_finalized_slot_update = self
             .ledger_db
-            .materialize_latest_finalize_slot(last_finalized_slot_number)?;
+            .materialize_latest_finalize_slot(slot_number, last_finalized_slot_number)?;
 
         ledger_change_set.merge(last_finalized_slot_update);
         tracing::trace!(
@@ -359,27 +368,31 @@ where
         for aggregated_proof in aggregated_proofs {
             let this_height_data = self
                 .ledger_db
-                .materialize_aggregated_proof(aggregated_proof)?;
+                .materialize_aggregated_proof(slot_number, aggregated_proof)?;
             ledger_change_set.merge(this_height_data);
             tracing::trace!("Aggregated Proof is materialized into Ledger ChangeSet");
         }
+        let ledger_materialization_time = ledger_materialization_start.elapsed();
+        tracing::trace!(time = ?ledger_materialization_time, "Materialized all LegerDb changes");
 
-        let save_and_finalize_start = std::time::Instant::now();
+        let save_start = std::time::Instant::now();
         self.storage_manager
             .save_change_set(&block_header, stf_changes, ledger_change_set)?;
-        let save_time = save_and_finalize_start.elapsed();
+        let save_time = save_start.elapsed();
+        let finalize_start = std::time::Instant::now();
         for finalized_transition in &finalized_transitions {
             self.storage_manager
                 .finalize(&finalized_transition.block_header)?;
         }
-        let save_and_finalize_time = save_and_finalize_start.elapsed();
+        let commit_time = finalize_start.elapsed();
         tracing::trace!(
             ?save_time,
-            ?save_and_finalize_time,
+            ?commit_time,
             "All finalized transitions are marked as finalized"
         );
-        self.update_api_and_ledger_storage(&block_header).await?;
+        let updating_api_time = self.update_api_and_ledger_storage(&block_header).await?;
 
+        let sending_to_prover_start = std::time::Instant::now();
         if let Some(stf_info_sender) = &mut self.stf_info_sender {
             // Notify `StateTransitionInfo` consumers that the data is saved in the Db.
             let max_provable_slot_number = self
@@ -393,18 +406,30 @@ where
                 .notify(max_provable_slot_number, &self.ledger_db)
                 .await?;
             tracing::trace!(
+                ?max_provable_slot_number,
                 "State transition info receiver has been notified about max provable slot number"
             );
         }
+        let sending_to_prover_time = sending_to_prover_start.elapsed();
 
         self.state_root = new_state_root;
-        // API storage and Ledger have all data from this iteration,
-        // now it is safe to submit notifications.
-        tracing::trace!("Sending ledger notifications");
-        self.ledger_db.send_notifications();
+        sov_metrics::track_metrics(|tracker| {
+            tracker.submit(RunnerProcessStfChangesMetrics {
+                da_height: block_header.height(),
+                aggregated_proofs_count,
+                finalized_transitions_count: finalized_transitions.len(),
+                total_time: start.elapsed(),
+                processing_finalized_transitions_time,
+                ledger_changes_materializing_time: ledger_materialization_time,
+                saving_to_storage_time: save_time,
+                committing_storage_time: commit_time,
+                updating_api_storage_time: updating_api_time,
+                sending_stf_info_time_to_prover_time: sending_to_prover_time,
+            });
+        });
         tracing::trace!(
-            "Ledger notifications have been sent, state manager has completed its task"
-        );
+            time = ?start.elapsed(),
+            "StateManager has processed STF changes");
 
         Ok(())
     }
@@ -464,9 +489,11 @@ where
                 return Ok(true);
             }
             // If it is not last finalized, but finalized in the past
-            let past_finalized_block = da_service.get_block_at(block_header.height()).await?;
+            let past_finalized_block = da_service
+                .get_block_header_at(block_header.height())
+                .await?;
 
-            if block_header.hash() == past_finalized_block.header().hash() {
+            if block_header.hash() == past_finalized_block.hash() {
                 tracing::trace!("Passed block header has been finalized in the past => no reorg");
                 return Ok(false);
             }
@@ -770,6 +797,8 @@ where
         <Da::Spec as DaSpec>::BlockHeader,
         Vec<StateOnBlock<Da::Spec, StateRoot>>,
     )> {
+        // DaService call # 1
+        let mut da_service_calls = 1;
         let last_finalized_header = da_service.get_last_finalized_block_header().await?;
         let earliest_seen_transition = self
             .get_earliest_seen_height()
@@ -785,10 +814,11 @@ where
 
         let last_seen_finalized_header = if last_finalized_header.height() > highest_seen_transition
         {
+            // DaService call # 2
+            da_service_calls += 1;
             da_service
-                .get_block_at(highest_seen_transition)
+                .get_block_header_at(highest_seen_transition)
                 .await?
-                .header()
                 .clone()
         } else {
             last_finalized_header.clone()
@@ -870,7 +900,9 @@ where
             "Going to extract finalized transitions from previously seen transitions"
         );
         for height in range {
-            let finalized_at_that_height = da_service.get_block_at(height).await?;
+            // DaService call # 3 + n
+            let finalized_at_that_height = da_service.get_block_header_at(height).await?;
+            da_service_calls += 1;
 
             tracing::trace!(height, "Going to extract finalized transitions from height");
             let blocks_on_height = self
@@ -887,7 +919,7 @@ where
                     .state_on_block
                     .remove(&block_hash)
                     .expect("Should be there");
-                if block_hash == finalized_at_that_height.header().hash() {
+                if block_hash == finalized_at_that_height.hash() {
                     assert!(
                         !pushed_for_this_height,
                         "Should be only one finalized transition per height"
@@ -904,22 +936,28 @@ where
         finalized_transitions.reverse();
         tracing::trace!(
             finalized_transitions = finalized_transitions.len(),
+            ?da_service_calls,
             "Completed check for finalized transitions"
         );
         Ok((last_finalized_header, finalized_transitions))
     }
 
+    // Returns updating time
     async fn update_api_and_ledger_storage(
         &mut self,
         block_header: &<<Da as DaService>::Spec as DaSpec>::BlockHeader,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<std::time::Duration> {
         let start = std::time::Instant::now();
-        tracing::trace!(after_block = %block_header.display(), "Updating Ledger and API storage");
+        tracing::trace!(after_block = %block_header.display(), "Sending new Ledger and API storages");
         let (api_storage, ledger_state) = self.storage_manager.create_state_after(block_header)?;
 
         self.update_channels(api_storage, ledger_state).await?;
-        tracing::trace!(time = ?start.elapsed(), "Ledger and API storages are updated");
-        Ok(())
+        let updating_time = start.elapsed();
+        tracing::trace!(
+            after_block = %block_header.display(),
+            time = ?
+            "Ledger and API storages have been sent");
+        Ok(updating_time)
     }
 
     fn get_slot_number(&self) -> anyhow::Result<SlotNumber> {

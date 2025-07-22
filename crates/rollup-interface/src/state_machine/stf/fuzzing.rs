@@ -34,7 +34,7 @@ struct FuzzMerkleHasher<'a> {
     hasher: &'a dyn FuzzHasher,
 }
 
-impl<'a> FuzzMerkleHasher<'a> {
+impl FuzzMerkleHasher<'_> {
     fn empty_root(&mut self) -> [u8; 32] {
         self.hasher.hash(&[])
     }

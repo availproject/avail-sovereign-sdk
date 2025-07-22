@@ -13,7 +13,7 @@ use sov_modules_api::{
     Context, CredentialId, DaSpec, Module, PrivateKey, PublicKey, Spec, StateCheckpoint, WorkingSet,
 };
 use sov_test_utils::storage::SimpleStorageManager;
-use sov_test_utils::{TestHasher, TestPrivateKey};
+use sov_test_utils::TestPrivateKey;
 
 type S = sov_test_utils::TestSpec;
 // Check well-formed calls
@@ -51,7 +51,7 @@ fuzz_target!(
         let accounts: Vec<_> = keys
             .iter()
             .map(|k| {
-                let credential_id = k.pub_key().credential_id::<TestHasher>();
+                let credential_id = k.pub_key().credential_id();
 
                 AccountData {
                     credential_id,
@@ -75,7 +75,7 @@ fuzz_target!(
         let mut state: HashMap<_, _> = keys
             .into_iter()
             .map(|k| {
-                let credential_id = k.pub_key().credential_id::<TestHasher>();
+                let credential_id = k.pub_key().credential_id();
                 (credential_id.into(), k)
             })
             .collect();
@@ -104,7 +104,7 @@ fuzz_target!(
             let public = secret.pub_key();
             state.insert(*sender, secret);
 
-            let credential_id: CredentialId = public.credential_id::<TestHasher>();
+            let credential_id: CredentialId = public.credential_id();
 
             let msg = CallMessage::InsertCredentialId(credential_id);
             accounts.call(msg, &context, &mut working_set).unwrap();

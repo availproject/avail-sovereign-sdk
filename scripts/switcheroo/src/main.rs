@@ -129,7 +129,7 @@ fn save_preset(cargo_toml_path: &Path, preset_name: &str) {
         .join(format!("{preset_name}.json"));
 
     let preset_file =
-        File::create(&preset_path).unwrap_or_else(|_| panic!("Failed to create {:?}", preset_path));
+        File::create(&preset_path).unwrap_or_else(|_| panic!("Failed to create {preset_path:?}"));
     serde_json::to_writer_pretty(preset_file, &preset).expect("Failed to write preset JSON");
 }
 
@@ -157,10 +157,7 @@ fn add_default_members(cargo_toml_path: &Path, preset_name: &str) {
     }
 
     write_cargo_toml(cargo_toml_path, &doc);
-    println!(
-        "Added crates from preset '{}' to [workspace.default-members].",
-        preset_name
-    );
+    println!("Added crates from preset '{preset_name}' to [workspace.default-members].");
 }
 
 fn disable_default_members(cargo_toml_path: &Path) {
@@ -201,10 +198,7 @@ fn remove_preset(cargo_toml_path: &Path, preset_name: &str) {
         });
 
         write_cargo_toml(cargo_toml_path, &doc);
-        println!(
-            "Removed crates from preset '{}' in [workspace.default-members].",
-            preset_name
-        );
+        println!("Removed crates from preset '{preset_name}' in [workspace.default-members].");
     } else {
         println!("No [workspace.default-members] section found, nothing to remove.");
     }
@@ -214,25 +208,22 @@ fn read_preset_members(preset_name: &str) -> Vec<String> {
     let preset_path = Path::new("scripts")
         .join("switcheroo")
         .join("presets")
-        .join(format!("{}.json", preset_name));
+        .join(format!("{preset_name}.json"));
 
     if !preset_path.exists() {
-        eprintln!(
-            "Error: Preset '{}' not found at path {:?}",
-            preset_name, preset_path
-        );
+        eprintln!("Error: Preset '{preset_name}' not found at path {preset_path:?}");
         process::exit(1);
     }
 
     let preset_file = File::open(&preset_path)
-        .unwrap_or_else(|_| panic!("Failed to open preset file {:?}", preset_path));
+        .unwrap_or_else(|_| panic!("Failed to open preset file {preset_path:?}"));
 
     serde_json::from_reader(preset_file).expect("Failed to parse preset JSON")
 }
 
 fn parse_cargo_toml(cargo_toml_path: &Path) -> DocumentMut {
     let cargo_toml_content = fs::read_to_string(cargo_toml_path)
-        .unwrap_or_else(|_| panic!("Failed to read {:?}", cargo_toml_path));
+        .unwrap_or_else(|_| panic!("Failed to read {cargo_toml_path:?}"));
 
     cargo_toml_content
         .parse::<DocumentMut>()
@@ -241,7 +232,7 @@ fn parse_cargo_toml(cargo_toml_path: &Path) -> DocumentMut {
 
 fn write_cargo_toml(cargo_toml_path: &Path, doc: &DocumentMut) {
     let mut file = File::create(cargo_toml_path)
-        .unwrap_or_else(|_| panic!("Failed to create {:?}", cargo_toml_path));
+        .unwrap_or_else(|_| panic!("Failed to create {cargo_toml_path:?}"));
     file.write_all(doc.to_string().as_bytes())
         .expect("Failed to write Cargo.toml");
 }
@@ -250,12 +241,12 @@ fn list_presets() {
     let preset_dir = Path::new("scripts").join("switcheroo").join("presets");
 
     if !preset_dir.exists() {
-        eprintln!("No presets directory found at path: {:?}", preset_dir);
+        eprintln!("No presets directory found at path: {preset_dir:?}");
         return;
     }
 
     let Ok(entries) = fs::read_dir(&preset_dir) else {
-        eprintln!("Failed to read directory: {:?}", preset_dir);
+        eprintln!("Failed to read directory: {preset_dir:?}");
         return;
     };
 

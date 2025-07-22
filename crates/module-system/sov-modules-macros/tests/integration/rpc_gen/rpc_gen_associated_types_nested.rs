@@ -113,7 +113,7 @@ pub mod my_module {
                     .data
                     .get(state)
                     .unwrap_infallible()
-                    .map(|d| format!("{:?}", d));
+                    .map(|d| format!("{d:?}"));
                 Ok(QueryResponse { value })
             }
         }

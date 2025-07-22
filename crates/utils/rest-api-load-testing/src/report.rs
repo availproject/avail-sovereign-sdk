@@ -101,7 +101,7 @@ impl Summary {
         }
 
         for not_ok in not_ok_data {
-            println!("{:?}", not_ok);
+            println!("{not_ok:?}");
             println!();
         }
 
@@ -109,7 +109,7 @@ impl Summary {
         println!("Measurement reports sorted by average time taken: ");
         let sorted = Self::sort_by_avg_time(ok_data);
         for report in sorted {
-            println!("{:?}", report);
+            println!("{report:?}");
         }
     }
 }

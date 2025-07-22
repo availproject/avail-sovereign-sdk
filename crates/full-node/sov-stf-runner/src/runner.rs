@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,8 +8,8 @@ use jsonrpsee::RpcModule;
 use sov_db::ledger_db::{LedgerDb, SlotCommit};
 use sov_db::schema::{DeltaReader, SchemaBatch};
 use sov_metrics::RunnerMetrics;
-use sov_rollup_interface::common::SlotNumber;
-use sov_rollup_interface::da::{BlobReaderTrait, BlockHeaderTrait};
+use sov_rollup_interface::common::{RollupHeight, SlotNumber};
+use sov_rollup_interface::da::{BlobReaderTrait, BlockHeaderTrait, DaSpec};
 use sov_rollup_interface::node::da::{DaService, SlotData};
 use sov_rollup_interface::node::ledger_api::LedgerStateProvider;
 use sov_rollup_interface::node::{
@@ -58,6 +59,7 @@ where
     shutdown_receiver: watch::Receiver<()>,
     secondary_shutdown_sender: watch::Sender<()>,
     background_handles: Vec<tokio::task::JoinHandle<anyhow::Result<()>>>,
+    stop_at_rollup_height: Option<RollupHeight>,
 }
 
 struct DiscardEvents;
@@ -107,7 +109,8 @@ where
     let mut ledger_change_set =
         ledger_db.materialize_slot(data_to_commit, genesis_state_root.as_ref())?;
 
-    let finalized_slot_changes = ledger_db.materialize_latest_finalize_slot(SlotNumber::GENESIS)?;
+    let finalized_slot_changes =
+        ledger_db.materialize_latest_finalize_slot(SlotNumber::GENESIS, SlotNumber::GENESIS)?;
 
     ledger_change_set.merge(finalized_slot_changes);
     storage_manager.save_change_set(&block_header, initialized_storage, ledger_change_set)?;
@@ -150,6 +153,7 @@ where
         state_height_tracker: Box<dyn ProvableHeightTracker>,
         shutdown_receiver: watch::Receiver<()>,
         monitoring_config: MonitoringConfig,
+        stop_at_rollup_height: Option<RollupHeight>,
     ) -> anyhow::Result<Self> {
         error_if_tokio_runtime_is_not_multi_threaded()?;
 
@@ -185,9 +189,13 @@ where
             (None, None)
         };
 
+        let target_da_height = Self::get_target_block(&da_service, &stop_at_rollup_height)
+            .await?
+            .height();
+
         let sync_state = Arc::new(DaSyncState {
             synced_da_height: da_height_processed.into(),
-            target_da_height: da_service.get_head_block_header().await?.height().into(),
+            target_da_height: AtomicU64::new(target_da_height),
             sync_status_sender,
         });
 
@@ -235,7 +243,20 @@ where
             shutdown_receiver,
             secondary_shutdown_sender,
             background_handles: vec![fetcher_background_handle],
+            stop_at_rollup_height,
         })
+    }
+
+    async fn get_target_block(
+        da_service: &Da,
+        stop_at_rollup_height: &Option<RollupHeight>,
+    ) -> anyhow::Result<<Da::Spec as DaSpec>::BlockHeader> {
+        // If we've entered the upgrade procedure, the rollup processes only finalized blocks.
+        if stop_at_rollup_height.is_some() {
+            da_service.get_last_finalized_block_header().await
+        } else {
+            da_service.get_head_block_header().await
+        }
     }
 
     /// Subscribes to this runner's [`StateUpdateInfo`] channel, if enabled.
@@ -282,6 +303,7 @@ where
     ) -> tokio::task::JoinHandle<()> {
         let sync_state = self.sync_state.clone();
         let da_service = self.da_service.clone();
+        let stop_at_rollup_height = self.stop_at_rollup_height;
 
         tokio::task::spawn(async move {
             let mut interval = tokio::time::interval(polling_interval);
@@ -293,8 +315,11 @@ where
             interval.tick().await; // Tick the interval once because it starts at 0ms.
 
             loop {
-                match future_or_shutdown(da_service.get_head_block_header(), &shutdown_receiver)
-                    .await
+                match future_or_shutdown(
+                    Self::get_target_block(&da_service, &stop_at_rollup_height),
+                    &shutdown_receiver,
+                )
+                .await
                 {
                     FutureOrShutdownOutput::Shutdown => break,
                     FutureOrShutdownOutput::Output(Err(error)) => {
@@ -353,24 +378,44 @@ where
     /// Runs the rollup.
     pub async fn run_in_process(&mut self) -> anyhow::Result<()> {
         self.state_manager.startup().await?;
+
         let mut next_da_height = self.first_unprocessed_height_at_startup;
-        let target_da_height = self.da_service.get_head_block_header().await?.height();
-        self.sync_state.update_target(target_da_height)?;
 
         let status_updater_handle = self
             .spawn_sync_status_updater(self.da_polling_interval, self.shutdown_receiver.clone());
 
+        let stop_at_rollup_height = self.stop_at_rollup_height;
+        let shutdown_receiver = self.shutdown_receiver.clone();
         loop {
-            let shutdown_receiver = self.shutdown_receiver.clone();
-            match future_or_shutdown(self.process_next_slot(next_da_height), &shutdown_receiver)
-                .await
-            {
-                FutureOrShutdownOutput::Shutdown => break,
-                FutureOrShutdownOutput::Output(slot_result) => {
-                    next_da_height = slot_result?;
+            if self.stop_at_rollup_height.is_some() {
+                // Rollup is performing an upgrade procedure. We wait until the next_da_height is finalized.
+                let is_shutting_down = Self::wait_until_next_da_height_finalized_or_shutdown(
+                    self,
+                    next_da_height,
+                    &shutdown_receiver,
+                )
+                .await?;
+
+                if is_shutting_down {
+                    break;
                 }
             }
+            match future_or_shutdown(
+                self.process_next_slot(next_da_height, &stop_at_rollup_height),
+                &shutdown_receiver,
+            )
+            .await
+            {
+                FutureOrShutdownOutput::Shutdown => break,
+                FutureOrShutdownOutput::Output(slot_result) => match slot_result? {
+                    Some(next) => next_da_height = next,
+                    None => {
+                        break;
+                    }
+                },
+            }
         }
+
         info!("Runner main loop is completed, keep shutting down...");
         if let Err(e) = self.secondary_shutdown_sender.send(()) {
             tracing::warn!(
@@ -382,18 +427,50 @@ where
         status_updater_handle
             .await
             .context("Status update handler")?;
+
         let background_handles = std::mem::take(&mut self.background_handles);
         for handle in background_handles {
             let _ = handle.await?;
         }
+
         Ok(())
+    }
+
+    async fn wait_until_next_da_height_finalized_or_shutdown(
+        &self,
+        next_da_height: u64,
+        shutdown_receiver: &watch::Receiver<()>,
+    ) -> anyhow::Result<bool> {
+        loop {
+            match future_or_shutdown(
+                self.da_service.get_last_finalized_block_number(),
+                shutdown_receiver,
+            )
+            .await
+            {
+                FutureOrShutdownOutput::Shutdown => return Ok(true),
+                FutureOrShutdownOutput::Output(finalized_block_height) => {
+                    let finalized = finalized_block_height?;
+                    if next_da_height > finalized {
+                        info!("Waiting until {next_da_height} is finalized, current finalized is {finalized}");
+                        tokio::time::sleep(self.da_polling_interval).await;
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        Ok(false)
     }
 
     #[tracing::instrument(skip(self))]
     async fn process_next_slot(
         &mut self,
         mut next_da_height: NextDaHeightToProcess,
-    ) -> anyhow::Result<NextDaHeightToProcess> {
+        stop_at_rollup_height: &Option<RollupHeight>,
+    ) -> anyhow::Result<Option<NextDaHeightToProcess>> {
         let loop_start = std::time::Instant::now();
         let prev_state_root = self.get_state_root().clone();
         debug!("Requesting DA block");
@@ -529,6 +606,7 @@ where
         let aggregated_proofs =
             Self::collect_aggregated_proofs(slot_result.proof_receipts.into_iter());
 
+        let processing_changes_start = std::time::Instant::now();
         self.state_manager
             .process_stf_changes(
                 &self.da_service,
@@ -571,11 +649,27 @@ where
                 stf_transition_time: stf_execution_start.elapsed(),
                 extract_blobs_time: da_extraction_time,
                 extraction_proof_time: get_relevant_proofs_time,
+                processing_changes_time: processing_changes_start.elapsed(),
             };
             metrics.track_runner_metrics(point);
         });
 
-        Ok(next_da_height + 1)
+        // If the rollup is upgrading and the current height has reached the stop point,
+        // halt further slot processing.
+        if let Some(stop_at_rollup_height) = stop_at_rollup_height {
+            if &slot_result.rollup_height == stop_at_rollup_height {
+                info!("Stopping at rollup height: {}", stop_at_rollup_height);
+                return Ok(None);
+            }
+            assert!(
+                &slot_result.rollup_height < stop_at_rollup_height,
+                "The rollup height ({}) must be less than the stop height ({})",
+                slot_result.rollup_height,
+                stop_at_rollup_height
+            );
+        }
+
+        Ok(Some(next_da_height + 1))
     }
 
     /// Allows reading current state root

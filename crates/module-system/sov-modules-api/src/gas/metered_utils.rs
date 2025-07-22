@@ -254,5 +254,5 @@ pub fn metered_credential<S: Spec>(
 ) -> Result<CredentialId, GasMeteringError<S::Gas>> {
     let cost = S::gas_to_charge_for_credential();
     meter.charge_gas(&cost)?;
-    Ok(pub_key.credential_id::<<S::CryptoSpec as CryptoSpec>::Hasher>())
+    Ok(pub_key.credential_id())
 }

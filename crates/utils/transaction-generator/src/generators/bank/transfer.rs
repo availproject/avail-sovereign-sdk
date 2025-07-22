@@ -119,10 +119,7 @@ impl<S: Spec> BankMessageGenerator<S> {
 
         // Pick a random amount of a random token, and a random address to send it to
         let from_balance = from_account.pick_random_balance(u)?.unwrap_or_else(|| {
-            panic!(
-                "We picked a non-empty account but {} had no tokens",
-                from_addr
-            )
+            panic!("We picked a non-empty account but {from_addr} had no tokens")
         });
 
         let token_id = from_balance.token_id;

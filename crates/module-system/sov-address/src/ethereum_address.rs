@@ -5,7 +5,6 @@ use std::str::FromStr;
 
 use alloy_primitives::AddressError;
 use borsh::{BorshDeserialize, BorshSerialize};
-use digest::consts::U32;
 #[cfg(feature = "native")]
 use private_key::EthereumPrivateKey;
 use reth_primitives::keccak256;
@@ -16,10 +15,9 @@ use secp256k1::ecdsa::Signature;
 use secp256k1::{Message, PublicKey, SECP256K1};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
-use sov_modules_api::digest::Digest;
 use sov_modules_api::macros::UniversalWallet;
-use sov_modules_api::{BasicAddress, CryptoSpec};
-use sov_rollup_interface::crypto::{PublicKeyHex, SigVerificationError};
+use sov_modules_api::{BasicAddress, CryptoSpec, HexString};
+use sov_rollup_interface::crypto::{CredentialId, PublicKeyHex, SigVerificationError};
 
 use crate::{MultiAddress, Not28Bytes};
 
@@ -158,6 +156,18 @@ mod evm_spec_address_tests {
 )]
 /// A standard 20 byte Ethereum address with checksum.
 pub struct EthereumAddress(#[sov_wallet(as_ty = "[u8;20]", display = "hex")] pub Address);
+
+impl From<CredentialId> for EthereumAddress {
+    fn from(credential_id: CredentialId) -> Self {
+        credential_id.0.into()
+    }
+}
+
+impl From<HexString<[u8; 32]>> for EthereumAddress {
+    fn from(value: HexString<[u8; 32]>) -> Self {
+        Self::try_from(&value.0.as_slice()[12..32]).unwrap()
+    }
+}
 
 impl<'a> From<&'a EthereumPublicKey> for EthereumAddress {
     fn from(value: &'a EthereumPublicKey) -> Self {
@@ -410,34 +420,32 @@ pub mod private_key {
 }
 
 /// The public key of an secp256k1 keypair. Wraps the optimized Risc0 fork of the ed25519-dalek crate.
-#[derive(PartialEq, Eq, Hash, Clone, Debug, JsonSchema)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug, JsonSchema, UniversalWallet)]
 pub struct EthereumPublicKey {
     #[schemars(
         flatten,
         with = "String",
         length(equal = "secp256k1::constants::PUBLIC_KEY_SIZE * 2")
     )]
+    #[sov_wallet(as_ty = "[u8; secp256k1::constants::PUBLIC_KEY_SIZE]")]
     pub(crate) pub_key: PublicKey,
 }
 
 impl EthereumPublicKey {
     /// Returns the bytes of the underlying public key.
-    pub fn bytes(&self) -> [u8; 33] {
+    pub fn bytes(&self) -> [u8; PUBLIC_KEY_SIZE] {
         self.pub_key.serialize()
     }
 }
 
 impl sov_rollup_interface::crypto::PublicKey for EthereumPublicKey {
-    fn credential_id<Hasher: Digest<OutputSize = U32>>(
-        &self,
-    ) -> sov_rollup_interface::crypto::CredentialId {
-        let hash = {
-            let mut hasher = Hasher::new();
-            hasher.update(self.bytes());
-            hasher.finalize().into()
-        };
+    fn credential_id(&self) -> sov_rollup_interface::crypto::CredentialId {
+        // Use the same method as EthereumAddress::from(&EthereumPublicKey)
+        // Get the uncompressed public key bytes (without the prefix byte)
+        let uncompressed = self.pub_key.serialize_uncompressed();
+        let hash: [u8; 32] = keccak256(&uncompressed[1..]).into();
 
-        sov_rollup_interface::crypto::CredentialId(hash)
+        sov_rollup_interface::crypto::CredentialId(hash.into())
     }
 }
 
@@ -459,10 +467,13 @@ impl BorshSerialize for EthereumPublicKey {
 }
 
 /// A secp256k1 signature. Wraps the rust-secp256k1 crate.
-#[derive(PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize, JsonSchema)]
+#[derive(
+    PartialEq, Eq, Debug, Clone, serde::Serialize, serde::Deserialize, JsonSchema, UniversalWallet,
+)]
 pub struct EthereumSignature {
     /// The inner signature.
     #[schemars(flatten, with = "String", length(equal = "128"))]
+    #[sov_wallet(as_ty = "[u8; 64]")]
     pub msg_sig: Signature,
 }
 
@@ -508,7 +519,7 @@ impl sov_rollup_interface::crypto::Signature for EthereumSignature {
 }
 
 fn map_error(e: secp256k1::Error) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, e)
+    std::io::Error::other(e)
 }
 
 #[cfg(feature = "native")]
@@ -683,7 +694,7 @@ impl TryFrom<&PublicKeyHex> for EthereumPublicKey {
 
 #[cfg(test)]
 mod hex_tests {
-    use sov_rollup_interface::crypto::PrivateKey;
+    use sov_rollup_interface::crypto::{PrivateKey, PublicKey};
 
     use super::*;
 
@@ -716,5 +727,30 @@ mod hex_tests {
             found_addr,
             EthereumAddress::from_str("0x71334bf1710D12c9f689cC819476fA589F08C64C").unwrap()
         );
+    }
+
+    #[test]
+    fn test_ethereum_public_key_credential_id_to_address() {
+        // Create a known private key
+        let decoded = hex::decode("226634643938363630643866613337303631353535653933333134303737393434646131336530333964393237616433643366303762396136396430336339366122").unwrap();
+        let private_key: EthereumPrivateKey = serde_json::from_slice(&decoded).unwrap();
+
+        // Get the public key
+        let public_key = private_key.pub_key();
+
+        // Get the ethereum address directly from public key
+        let eth_address: EthereumAddress = (&public_key).into();
+
+        // Get the ethereum address from public key turned into credential id turned into address
+        let credential_id = public_key.credential_id();
+        let address_from_credential_id: EthereumAddress = credential_id.into();
+
+        // They should be equal
+        assert_eq!(eth_address, address_from_credential_id);
+
+        // Verify against known address
+        let expected_address =
+            EthereumAddress::from_str("0x71334bf1710D12c9f689cC819476fA589F08C64C").unwrap();
+        assert_eq!(eth_address, expected_address);
     }
 }

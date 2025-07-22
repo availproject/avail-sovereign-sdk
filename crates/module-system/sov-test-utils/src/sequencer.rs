@@ -82,7 +82,7 @@ impl<Rt: Runtime<TestSpec>> TestSequencerSetup<Rt> {
         let genesis_config =
             HighLevelOptimisticGenesisConfig::generate().add_accounts_with_default_balance(1);
 
-        let admin = genesis_config.additional_accounts[0].clone();
+        let admin = genesis_config.additional_accounts()[0].clone();
 
         let value_setter_config = ValueSetterConfig {
             admin: admin.address(),
@@ -116,7 +116,8 @@ impl<Rt: Runtime<TestSpec>> TestSequencerSetup<Rt> {
         storage_manager.finalize(&genesis_block.header)?;
         let (stf_state, ledger_state) =
             storage_manager.create_state_after(genesis_block.header())?;
-        let ledger_db = LedgerDb::with_reader(ledger_state)?;
+        let ledger_db = LedgerDb::with_reader(ledger_state.clone())?;
+        let api_ledger_db = LedgerDb::with_shared_notifications(&ledger_db);
 
         let (sync_status_sender, _) = watch::channel(SyncStatus::Syncing {
             synced_da_height: 0,
@@ -160,6 +161,7 @@ impl<Rt: Runtime<TestSpec>> TestSequencerSetup<Rt> {
             dir.path(),
             &config,
             ledger_db,
+            api_ledger_db,
             shutdown_sender.clone(),
         )
         .await?;

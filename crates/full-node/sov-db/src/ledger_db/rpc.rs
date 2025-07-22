@@ -257,16 +257,10 @@ impl LedgerRpcReader {
             .get_async::<TxByNumber>(&TxNumber(txn_num))
             .await
             .with_context(|| {
-                format!(
-                    "Failed to query transaction with number: {} from storage",
-                    txn_num
-                )
+                format!("Failed to query transaction with number: {txn_num} from storage")
             })?
             .with_context(|| {
-                format!(
-                    "Transaction with number: {} does not exist in storage",
-                    txn_num
-                )
+                format!("Transaction with number: {txn_num} does not exist in storage")
             })?;
         // Can't map over stored_txn.events because no Step trait, so doing this manually
         // TODO: can we implement the Step trait

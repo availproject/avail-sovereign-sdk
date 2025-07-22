@@ -346,7 +346,7 @@ impl StorableMockDaLayer {
                 entity::BATCH_NAMESPACE => batch_blobs.push(MockBlob::from(blob)),
                 entity::PROOF_NAMESPACE => proof_blobs.push(MockBlob::from(blob)),
                 namespace => {
-                    panic!("Unknown namespace: {}, corrupted block", namespace)
+                    panic!("Unknown namespace: {namespace}, corrupted block")
                 }
             }
         }
@@ -1137,7 +1137,7 @@ mod tests {
         Command::new("docker")
             .arg("version")
             .output()
-            .map_or(false, |output| output.status.success())
+            .is_ok_and(|output| output.status.success())
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1767,9 +1767,7 @@ mod tests {
             if height > height_without_blobs as usize {
                 assert!(
                     block.batch_blobs.is_empty(),
-                    "blobs should not be placed in blocks above the upper bound={} height={}",
-                    upper_bound,
-                    height
+                    "blobs should not be placed in blocks above the upper bound={upper_bound} height={height}"
                 );
             } else {
                 for mut blob in block.batch_blobs.into_iter() {

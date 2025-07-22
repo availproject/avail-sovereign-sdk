@@ -26,7 +26,7 @@ pub fn setup() -> (TestUser<S>, TestRunner<RT, S>) {
         .add_accounts_with_default_balance(1)
         .add_accounts_with_token(&token_name, true, 1, Amount::new(100_000));
 
-    let user_no_token_balance = genesis_config.additional_accounts[0].clone();
+    let user_no_token_balance = genesis_config.additional_accounts()[0].clone();
 
     assert!(user_no_token_balance.token_balance(&token_name).is_none());
 

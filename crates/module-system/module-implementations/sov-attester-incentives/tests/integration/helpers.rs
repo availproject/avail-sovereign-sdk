@@ -70,7 +70,11 @@ pub(crate) fn setup_with_custom_runtime(runtime: TestRuntime<S>) -> SetupParams 
 
     let genesis_challenger = genesis_config.initial_challenger.clone();
 
-    let additional_account = genesis_config.additional_accounts.first().unwrap().clone();
+    let additional_account = genesis_config
+        .additional_accounts()
+        .first()
+        .unwrap()
+        .clone();
 
     // Run genesis registering the attester and sequencer we've generated.
     let genesis = GenesisConfig::from_minimal_config(

@@ -86,8 +86,7 @@ pub(crate) async fn metrics_publisher_task(
     // Number is based on [`std::net::UdpSocket::send_to`] documentation.
     assert!(
         max_buffer_size < 65507,
-        "Max buffer size should be less than maximum allowed UDP packet, but it is {}",
-        max_buffer_size
+        "Max buffer size should be less than maximum allowed UDP packet, but it is {max_buffer_size}"
     );
 
     // Create the appropriate publisher based on the transport configuration
@@ -161,7 +160,7 @@ pub(crate) fn spawn_metrics_udp_receiver(
                         metrics_write.send(m.to_owned()).await.unwrap();
                     }
                 }
-                Err(e) => panic!("Error receiving: {}", e),
+                Err(e) => panic!("Error receiving: {e}"),
             }
         }
     });

@@ -46,9 +46,9 @@ pub fn setup() -> (
 ) {
     let genesis_config = HighLevelZkGenesisConfig::generate_with_additional_accounts(3);
 
-    let admin_account = genesis_config.additional_accounts[0].clone();
-    let extra_account = genesis_config.additional_accounts[1].clone();
-    let relayer_account = genesis_config.additional_accounts[1].clone();
+    let admin_account = genesis_config.additional_accounts()[0].clone();
+    let extra_account = genesis_config.additional_accounts()[1].clone();
+    let relayer_account = genesis_config.additional_accounts()[1].clone();
 
     let genesis = GenesisConfig::from_minimal_config(genesis_config.clone().into(), (), (), (), ());
 

@@ -23,9 +23,13 @@ generate_zk_runtime_with_kernel!(kernel_type: SoftConfirmationsKernel<'a, S>, So
 pub fn setup_soft_confirmation_kernel() -> (TestData<S>, TestRunner<SoftConfRT>) {
     let genesis_config = HighLevelZkGenesisConfig::generate_with_additional_accounts(2);
     let preferred_sequencer = genesis_config.initial_sequencer.clone();
-    let user_account = genesis_config.additional_accounts.first().unwrap().clone();
+    let user_account = genesis_config
+        .additional_accounts()
+        .first()
+        .unwrap()
+        .clone();
 
-    let regular_sequencer = genesis_config.additional_accounts[1].clone();
+    let regular_sequencer = genesis_config.additional_accounts()[1].clone();
     let regular_sequencer_da_address = MockAddress::new([42; 32]);
 
     let user_stake = <S as Spec>::Gas::from(TEST_DEFAULT_USER_STAKE);

@@ -16,7 +16,7 @@ pub struct IgnoredTransactionReceipt<T: TxReceiptContents> {
 
 /// A receipt for a single transaction. These receipts are stored in the rollup's database
 /// and may be queried via RPC. Receipts are generic over a type `R` which the rollup can use to
-/// store additional data, such as the status code of the transaction or the amount of gas used.s
+/// store additional data, such as the status code of the transaction or the amount of gas used.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A receipt showing the result of a transaction
 #[serde(bound = "T: TxReceiptContents")]

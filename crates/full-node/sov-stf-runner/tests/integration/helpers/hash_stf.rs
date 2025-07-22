@@ -5,6 +5,7 @@ use sov_mock_zkvm::{MockCodeCommitment, MockZkVerifier};
 use sov_modules_api::{
     AggregatedProofPublicData, ProofOutcome, ProofReceipt, ProofReceiptContents, Storage,
 };
+use sov_rollup_interface::common::RollupHeight;
 use sov_rollup_interface::da::{BlobReaderTrait, BlockHeaderTrait, DaSpec, RelevantBlobIters};
 use sov_rollup_interface::stf::{ApplySlotOutput, StateTransitionFunction};
 use sov_rollup_interface::zk::aggregated_proof::SerializedAggregatedProof;
@@ -151,7 +152,7 @@ impl<InnerVm: Zkvm, OuterVm: Zkvm, Da: DaSpec> StateTransitionFunction<InnerVm, 
                 ) {
                     Ok(public_data) => public_data,
                     Err(err) => {
-                        panic!("Error when processing proof: {:?}", err);
+                        panic!("Error when processing proof: {err:?}");
                     }
                 };
 
@@ -186,6 +187,7 @@ impl<InnerVm: Zkvm, OuterVm: Zkvm, Da: DaSpec> StateTransitionFunction<InnerVm, 
             // TODO: Add batch receipts to inspection
             batch_receipts: vec![],
             witness,
+            rollup_height: RollupHeight::new(0),
         }
     }
 }

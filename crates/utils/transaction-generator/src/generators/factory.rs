@@ -84,7 +84,8 @@ impl<
         validity: MessageValidity,
     ) -> arbitrary::Result<GeneratedMessage<S, <RT as DispatchCall>::Decodable, ChangelogEntry>>
     {
-        if u.len() < MINIMUM_RANDOMNESS_CALL_MESSAGE_GEN.try_into().unwrap() {
+        if u.len() < <u64 as TryInto<usize>>::try_into(MINIMUM_RANDOMNESS_CALL_MESSAGE_GEN).unwrap()
+        {
             return Err(arbitrary::Error::NotEnoughData);
         }
 

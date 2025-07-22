@@ -9,10 +9,7 @@ fn load_elf(path: &str) -> &'static [u8] {
     ELF.get_or_init(|| {
         let elf = std::fs::read(path).unwrap_or_default();
         if elf.is_empty() {
-            println!(
-                "Warning: ELF file at '{}' is empty or could not be read",
-                path
-            );
+            println!("Warning: ELF file at '{path}' is empty or could not be read");
         }
         elf
     })

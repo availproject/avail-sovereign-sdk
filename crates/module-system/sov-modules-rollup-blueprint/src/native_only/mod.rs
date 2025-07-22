@@ -12,7 +12,7 @@ use async_trait::async_trait;
 pub use endpoints::*;
 use sov_db::ledger_db::LedgerDb;
 use sov_db::schema::{DeltaReader, SchemaBatch};
-use sov_modules_api::capabilities::{HasCapabilities, ProofProcessor};
+use sov_modules_api::capabilities::{HasCapabilities, ProofProcessor, RollupHeight};
 use sov_modules_api::execution_mode::ExecutionMode;
 use sov_modules_api::provable_height_tracker::MaximumProvableHeight;
 use sov_modules_api::rest::{ApiState, StateUpdateReceiver};
@@ -33,6 +33,7 @@ use sov_state::Storage;
 use sov_stf_runner::processes::{
     start_op_workflow_in_background, start_operator_workflow_in_background,
     start_zk_workflow_in_background, ProverService, RollupProverConfig,
+    RollupProverConfigDiscriminants,
 };
 use sov_stf_runner::{
     initialize_state, query_state_update_info, CorsConfiguration, RollupConfig,
@@ -100,7 +101,7 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
         let rt_genesis =
             <Self::Runtime as RuntimeTrait<Self::Spec>>::genesis_config(rt_genesis_paths)
                 .with_context(|| {
-                    format!("Failed to read rollup genesis from {:?}", rt_genesis_paths)
+                    format!("Failed to read rollup genesis from {rt_genesis_paths:?}")
                 })?;
 
         Ok(GenesisParams {
@@ -153,14 +154,20 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
         runtime_genesis_paths: &<Self::Runtime as RuntimeTrait<Self::Spec>>::GenesisInput,
         rollup_config: RollupConfig<<Self::Spec as Spec>::Address, Self::DaService>,
         prover_config: Option<RollupProverConfig<<Self::Spec as Spec>::InnerZkvm>>,
+        stop_at_rollup_height: Option<RollupHeight>,
     ) -> anyhow::Result<Rollup<Self, M>>
     where
         <Self::Spec as Spec>::Storage: NativeStorage,
     {
         let genesis_params = self.create_genesis_config(runtime_genesis_paths, &rollup_config)?;
 
-        self.create_new_rollup_with_genesis_params(genesis_params, rollup_config, prover_config)
-            .await
+        self.create_new_rollup_with_genesis_params(
+            genesis_params,
+            rollup_config,
+            prover_config,
+            stop_at_rollup_height,
+        )
+        .await
     }
 
     /// Injects additional HTTP APIs for the sequencer.
@@ -183,9 +190,11 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
         da_sync_state: Arc<DaSyncState>,
         rollup_config: &RollupConfig<<Self::Spec as Spec>::Address, Self::DaService>,
         ledger_db: &LedgerDb,
+        api_ledger_db: &LedgerDb,
         da_service: &Self::DaService,
         shutdown_receiver: watch::Receiver<()>,
         shutdown_sender: tokio::sync::watch::Sender<()>,
+        stop_at_rollup_height: Option<RollupHeight>,
     ) -> anyhow::Result<SequencerCreationReceipt<Self::Spec>> {
         match &rollup_config.sequencer.sequencer_kind_config {
             SequencerKindConfig::Standard(seq_config) => {
@@ -197,6 +206,7 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
                         &rollup_config.storage.path,
                         &rollup_config.sequencer.with_seq_config(seq_config.clone()),
                         ledger_db.clone(),
+                        api_ledger_db.clone(),
                         shutdown_sender,
                     )
                     .await?;
@@ -213,9 +223,9 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
                     endpoints,
                     background_handles,
                     proof_sender: sequencer,
+                    api_ledger_db: api_ledger_db.clone(),
                 })
             }
-
             SequencerKindConfig::Preferred(seq_config) => {
                 let (sequencer, background_handles) =
                     PreferredSequencer::<Self::Spec, Self::Runtime, Self::DaService>::create(
@@ -225,7 +235,9 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
                         &rollup_config.storage.path,
                         &rollup_config.sequencer.with_seq_config(seq_config.clone()),
                         ledger_db.clone(),
+                        api_ledger_db.clone(),
                         shutdown_sender.clone(),
+                        stop_at_rollup_height,
                     )
                     .await?;
 
@@ -241,6 +253,7 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
                     endpoints,
                     background_handles,
                     proof_sender: sequencer,
+                    api_ledger_db: api_ledger_db.clone(),
                 })
             }
         }
@@ -254,6 +267,7 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
         genesis_params: GenesisParams<<Self::Runtime as RuntimeTrait<Self::Spec>>::GenesisConfig>,
         rollup_config: RollupConfig<<Self::Spec as Spec>::Address, Self::DaService>,
         prover_config: Option<RollupProverConfig<<Self::Spec as Spec>::InnerZkvm>>,
+        stop_at_rollup_height: Option<RollupHeight>,
     ) -> anyhow::Result<Rollup<Self, M>>
     where
         <Self::Spec as Spec>::Storage: NativeStorage,
@@ -268,6 +282,13 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
             <Self::Runtime as RuntimeTrait<Self::Spec>>::operating_mode(&genesis_params.runtime);
         info!(?operating_mode, "Instantiating a new rollup");
 
+        if let (OperatingMode::Operator, Some(prover_config)) =
+            (operating_mode, prover_config.clone())
+        {
+            let prover_config: RollupProverConfigDiscriminants = prover_config.into();
+            panic!("The operating mode is set to `{operating_mode:?}` and prover config is set to `{prover_config:?}`. This is not supported");
+        }
+
         let da_service = self
             .create_da_service(&rollup_config, secondary_shutdown_receiver.clone())
             .await;
@@ -279,7 +300,15 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
 
         let (prover_storage, ledger_state) =
             storage_manager.create_state_after(&current_finalized_header)?;
-        let mut ledger_db = self.create_ledger_db(ledger_state)?;
+        let ledger_db = self.create_ledger_db(ledger_state.clone())?;
+        // Create separate API LedgerDb that will be used to provide strong consistency for REST
+        // API. The updating of the underlying ledger reader will be delayed until other components
+        // have completed their processing.
+        //
+        // `ledger_db` will accumulate notifications by executing normally which will be
+        // published by `api_ledger_db` at a time when the results are consistent with the
+        // REST APIs view of the ledger.
+        let api_ledger_db = LedgerDb::with_shared_notifications(&ledger_db);
 
         let prev_root = ledger_db
             .get_head_slot()?
@@ -318,7 +347,8 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
                 // because genesis data won't be visible to it.
                 let (prover_storage, ledger_state) =
                     storage_manager.create_state_after(&genesis_header)?;
-                ledger_db.replace_reader(ledger_state);
+                ledger_db.replace_reader(ledger_state.clone());
+                api_ledger_db.replace_reader(ledger_state);
                 // Clearing notifications that has been produced during genesis.
                 // Rollup is not running yet, so there are no subscribers.
                 ledger_db.send_notifications();
@@ -377,6 +407,7 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
             visible_state_height_tracker,
             main_shutdown_receiver.clone(),
             rollup_config.monitoring.clone(),
+            stop_at_rollup_height,
         )
         .await?;
 
@@ -386,9 +417,11 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
                 runner.da_sync_state(),
                 &rollup_config,
                 &ledger_db,
+                &api_ledger_db,
                 &da_service,
                 main_shutdown_receiver.clone(),
                 main_shutdown_sender.clone(),
+                stop_at_rollup_height,
             )
             .await?;
 
@@ -432,7 +465,9 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
                     )
                     .await?
                 }
-                OperatingMode::Operator => start_operator_workflow_in_background().await,
+                OperatingMode::Operator => {
+                    start_operator_workflow_in_background(secondary_shutdown_receiver).await
+                }
             };
 
             background_handles.push(workflow_task_handle);
@@ -443,7 +478,7 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
                 state_update_receiver,
                 sync_status_receiver,
                 main_shutdown_receiver.clone(),
-                &ledger_db,
+                &api_ledger_db,
                 &sequencer,
                 &da_service,
                 &rollup_config,
@@ -526,15 +561,24 @@ impl<S: FullNodeBlueprint<M>, M: ExecutionMode> Rollup<S, M> {
                 .map_err(|_| anyhow::anyhow!("Failed to send Axum address"))?;
         }
 
-        let monitoring_task = spawn_task_monitor(self.shutdown_sender, self.background_handles);
+        let monitoring_task =
+            spawn_task_monitor(self.shutdown_sender.clone(), self.background_handles);
 
         runner.run_in_process().await?;
         tracing::info!("STF Runner has completed execution");
+
+        if self.shutdown_sender.send(()).is_err() {
+            tracing::info!(
+                "Failed to send primary shutdown signal because all receivers have been dropped"
+            );
+        }
+
         if self.secondary_shutdown_sender.send(()).is_err() {
             tracing::info!(
                 "Failed to send secondary shutdown signal because all receivers have been dropped"
             );
         }
+
         // blocks until background handles have shutdown
         monitoring_task.await??;
         for handle in self.endpoints.inner.background_handles {
@@ -612,6 +656,8 @@ pub struct SequencerCreationReceipt<S: Spec> {
     ///
     /// See [`crate::proof_sender::SovApiProofSender::new`].
     pub proof_sender: Arc<dyn ProofBlobSender>,
+    /// The API LedgerDb that the sequencer will update for REST API consistency
+    pub api_ledger_db: LedgerDb,
     #[allow(missing_docs)]
     pub endpoints: NodeEndpoints,
     #[allow(missing_docs)]

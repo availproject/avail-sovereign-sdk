@@ -67,7 +67,7 @@ async fn get_metrics(
                 // If it does, it means that the response is malformed.
                 // We should panic, because we can't recover from this.
                 // The response is malformed, so we can't even try to recover.
-                panic!("Failed to read response chunk: {:?}", e);
+                panic!("Failed to read response chunk: {e:?}");
             }
         }
     }

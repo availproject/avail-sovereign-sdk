@@ -10,7 +10,7 @@ use sov_modules_api::runtime::capabilities::{BlobSelector, Kernel as KernelTrait
 #[cfg(feature = "native")]
 use sov_modules_api::AccessoryStateReaderAndWriter;
 use sov_modules_api::{
-    BootstrapWorkingSet, DaSpec, Gas, InjectedControlFlow, IterableBatchWithId,
+    BootstrapWorkingSet, DaSpec, Gas, HexHash, InjectedControlFlow, IterableBatchWithId,
     KernelStateAccessor, SelectedBlob, Spec, StateReader, VersionReader, VisibleSlotNumber,
 };
 use sov_rollup_interface::common::SlotNumber;
@@ -23,7 +23,7 @@ pub struct SoftConfirmationsKernel<'a, S: Spec> {
     pub blob_storage: &'a mut BlobStorage<S>,
 }
 
-impl<'a, S: Spec> KernelTrait<S> for SoftConfirmationsKernel<'a, S> {
+impl<S: Spec> KernelTrait<S> for SoftConfirmationsKernel<'_, S> {
     fn true_slot_number(&self, state: &mut BootstrapWorkingSet<'_, S>) -> SlotNumber {
         self.chain_state.true_slot_number_at_bootstrap(state)
     }
@@ -49,7 +49,7 @@ impl<'a, S: Spec> KernelTrait<S> for SoftConfirmationsKernel<'a, S> {
     }
 }
 
-impl<'b, S: Spec> BlobSelector for SoftConfirmationsKernel<'b, S> {
+impl<S: Spec> BlobSelector for SoftConfirmationsKernel<'_, S> {
     type Spec = S;
 
     const ACCEPTS_PREFERRED_BATCHES: bool = true;
@@ -59,7 +59,10 @@ impl<'b, S: Spec> BlobSelector for SoftConfirmationsKernel<'b, S> {
         current_blobs: RelevantBlobIters<&mut [<S::Da as DaSpec>::BlobTransaction]>,
         state: &mut KernelStateAccessor<'_, S>,
         cf: CF,
-    ) -> anyhow::Result<BlobSelectorOutput<SelectedBlob<S, IterableBatchWithId<S, CF>>>> {
+    ) -> anyhow::Result<(
+        BlobSelectorOutput<SelectedBlob<S, IterableBatchWithId<S, CF>>>,
+        Vec<HexHash>,
+    )> {
         self.blob_storage
             .get_blobs_for_this_slot(current_blobs, state, cf)
     }
@@ -92,7 +95,7 @@ impl<'b, S: Spec> BlobSelector for SoftConfirmationsKernel<'b, S> {
     }
 }
 
-impl<'a, S: Spec> sov_modules_api::capabilities::ChainState for SoftConfirmationsKernel<'a, S> {
+impl<S: Spec> sov_modules_api::capabilities::ChainState for SoftConfirmationsKernel<'_, S> {
     type Spec = S;
 
     fn synchronize_chain(
@@ -204,7 +207,7 @@ impl<'a, S: Spec> sov_modules_api::capabilities::ChainState for SoftConfirmation
 /// These methods are used in the tests to access the internal state of the kernel.
 /// Normally these should not be used, because everything happens inside the stf.
 #[cfg(feature = "test-utils")]
-impl<'a, S: Spec> SoftConfirmationsKernel<'a, S> {
+impl<S: Spec> SoftConfirmationsKernel<'_, S> {
     /// Gets a reference to the kernel's ChainState module.
     pub fn get_chain_state(&self) -> &sov_chain_state::ChainState<S> {
         self.chain_state

@@ -46,7 +46,7 @@ pub fn track_num_of_in_flight_blobs(count: u64) {
     sov_metrics::track_metrics(|tracker| {
         tracker.submit_inline(
             "sov_rollup_num_of_in_flight_blobs",
-            format!("num_of_in_flight_blobs={}i", count),
+            format!("num_of_in_flight_blobs={count}i"),
         );
     });
 }

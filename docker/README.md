@@ -60,3 +60,49 @@ run will use the same credentials until the directory is manually cleaned up.
 
 In addition, each sequencer on startup will write it's `JWT` token to the same directory. The token is
 updated during consecutive runs.
+
+## Chaos Engineering
+
+[Toxiproxy](https://github.com/Shopify/toxiproxy) enables chaos engineering by simulating network failures and instabilities. 
+Use it to test how the rollup behaves when the connection to celestia-node is unreliable.
+
+### Setup
+
+1. Uncomment the toxiproxy service in [`docker-compose.yml`](./docker-compose.yml)
+2. Configure your rollup to connect to port `26659` (proxied) instead of `26658` (direct)
+
+### Usage
+
+The proxy starts without any network toxics enabled. Use the provided scripts to control network conditions:
+
+```bash
+# Enable standard toxics (light network issues)
+docker/toxiproxy/enable_standard_toxics.sh
+
+# Enable brutal toxics (severe network issues)
+docker/toxiproxy/enable_brutal_toxics.sh
+
+# Remove all toxics (restore normal network)
+docker/toxiproxy/remove_toxics.sh
+
+# Check current toxic status
+docker/toxiproxy/status_chaos.sh
+```
+
+Available toxic types include latency, timeouts, connection resets, and bandwidth limiting. 
+This allows you to test rollup resilience under various network failure scenarios.
+
+### Troubleshooting
+
+**Toxiproxy crashes when adding toxics:**
+- This happens when trying to add toxics to a proxy with active connections
+- Solution: Restart toxiproxy and try again:
+  ```bash
+  docker compose restart toxiproxy
+  # Wait a few seconds, then try adding toxics again
+  ```
+
+**Best practices:**
+- Add toxics immediately after starting toxiproxy, before connections are established
+- Use the remove script to clean up toxics before stopping services
+- Monitor toxiproxy logs for crash indicators: `docker compose logs toxiproxy`

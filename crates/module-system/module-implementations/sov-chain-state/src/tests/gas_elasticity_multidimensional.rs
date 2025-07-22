@@ -61,8 +61,7 @@ fn test_base_fee_increases_if_above_target() {
 
     assert!(
         GasPrice::from([Amount::new(1); 2]).dim_is_less_than(&delta_base_fee_per_gas),
-        "The base fee per gas delta should increase by more than 1, actual value {:?}",
-        delta_base_fee_per_gas
+        "The base fee per gas delta should increase by more than 1, actual value {delta_base_fee_per_gas:?}"
     );
 }
 

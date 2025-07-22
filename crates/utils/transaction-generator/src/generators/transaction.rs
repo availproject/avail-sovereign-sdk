@@ -82,18 +82,15 @@ impl<S: Spec> AssertOutcome<S> for MaxFeeOutcome {
         match self {
             MaxFeeOutcome::Insufficient => assert!(
                 !output.is_successful(),
-                "Insufficient expected tx to not be successful, found {:?}",
-                output
+                "Insufficient expected tx to not be successful, found {output:?}"
             ),
             MaxFeeOutcome::Exact => assert!(
                 output.is_successful(),
-                "Exact expected successful receipt, found {:?}",
-                output
+                "Exact expected successful receipt, found {output:?}"
             ),
             MaxFeeOutcome::Excess => assert!(
                 output.is_successful(),
-                "Excess expected successful receipt, found {:?}",
-                output
+                "Excess expected successful receipt, found {output:?}"
             ),
         }
     }
@@ -138,13 +135,11 @@ impl<S: Spec> AssertOutcome<S> for GasLimitOutcome {
         match self {
             GasLimitOutcome::Insufficient => assert!(
                 !output.is_successful(),
-                "Insufficient expected tx to not be successful, found {:?}",
-                output
+                "Insufficient expected tx to not be successful, found {output:?}"
             ),
             GasLimitOutcome::Excess => assert!(
                 output.is_successful(),
-                "Excess expected successful receipt, found {:?}",
-                output
+                "Excess expected successful receipt, found {output:?}"
             ),
         }
     }

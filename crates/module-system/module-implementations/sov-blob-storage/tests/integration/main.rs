@@ -70,11 +70,7 @@ fn check_visible_slot_height(
     assert_eq!(
         expected_visible_slot_heights_increases[slot_num],
         new_visible_slot_height - current_visible_slot_height,
-        "The visible slot height increase for the slot {} is not correct. Expected {}, but got new slot height {}, current slot height {}.",
-        slot_num,
-        expected_visible_slot_height,
-        new_visible_slot_height,
-        current_visible_slot_height,
+        "The visible slot height increase for the slot {slot_num} is not correct. Expected {expected_visible_slot_height}, but got new slot height {new_visible_slot_height}, current slot height {current_visible_slot_height}.",
     );
 }
 
@@ -174,17 +170,13 @@ fn assert_blobs_are_correctly_received_helper<
             assert_eq!(
                 sent_slots[sent_blob_num.id].0,
                 MockHash(received_slots[received_slot_num][received_batch_num].0),
-                "The blob hash for the blob number {} in the slot {} is not correct.",
-                received_batch_num,
-                received_slot_num,
+                "The blob hash for the blob number {received_batch_num} in the slot {received_slot_num} is not correct.",
             );
 
             assert_eq!(
                 sent_slots[sent_blob_num.id].1,
                 received_slots[received_slot_num][received_batch_num].1,
-                "The blob sender for the blob number {} in the slot {} is not correct.",
-                received_batch_num,
-                received_slot_num,
+                "The blob sender for the blob number {received_batch_num} in the slot {received_slot_num} is not correct.",
             );
 
             if let Some(sequence_number) = sent_blob_num.sequence_number {

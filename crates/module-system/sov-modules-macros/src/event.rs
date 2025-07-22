@@ -12,7 +12,7 @@ pub(crate) struct EventMacro {
     field_extractor: StructFieldExtractor,
 }
 
-impl<'a> StructDef<'a> {
+impl StructDef<'_> {
     fn create_event_enum_legs(&self) -> Vec<proc_macro2::TokenStream> {
         self.fields
             .iter()

@@ -9,7 +9,7 @@ use sov_modules_api::track_gas_constants_usage;
 #[cfg(feature = "native")]
 use sov_modules_api::{capabilities::RollupHeight, AccessoryDelta};
 use sov_modules_api::{
-    BatchSequencerReceipt, GasArray, GasSpec, IncrementalBatch, InjectedControlFlow,
+    BatchSequencerReceipt, GasArray, GasSpec, HexHash, IncrementalBatch, InjectedControlFlow,
     KernelStateAccessor, NoOpControlFlow, SelectedBlob, TransactionReceipt, VersionReader,
 };
 #[cfg(feature = "native")]
@@ -244,7 +244,7 @@ where
                 .genesis_root(accessory_delta).expect("genesis root must be set on first iteration of `materialize_slot`. This is a bug - please report it")
         } else {
             runtime.chain_state().visible_hash_with_accessory_state(rollup_height.saturating_add(1), accessory_delta)
-                .unwrap_or_else(|| panic!("next visible hash must be known in advance, but was unable to get it for rollup height {}. This is a bug - please report it", rollup_height))
+                .unwrap_or_else(|| panic!("next visible hash must be known in advance, but was unable to get it for rollup height {rollup_height}. This is a bug - please report it"))
         }
     }
 }
@@ -294,7 +294,7 @@ where
             &mut genesis_accessor,
         ) {
             tracing::error!(error = %e, "Runtime initialization must succeed");
-            panic!("Runtime initialization must succeed {}", e);
+            panic!("Runtime initialization must succeed {e}");
         }
 
         #[cfg(feature = "native")]
@@ -392,7 +392,10 @@ where
         relevant_blobs: RelevantBlobIters<&mut [<S::Da as DaSpec>::BlobTransaction]>,
         kernel: &mut KernelStateAccessor<S>,
         cf: CF,
-    ) -> BlobSelectorOutput<SelectedBlob<S, IterableBatchWithId<S, CF>>> {
+    ) -> (
+        BlobSelectorOutput<SelectedBlob<S, IterableBatchWithId<S, CF>>>,
+        Vec<HexHash>,
+    ) {
         runtime
             .blob_selector()
             .get_blobs_for_this_slot(relevant_blobs, kernel, cf)
@@ -408,6 +411,7 @@ where
 {
     /// Run a state transition using the STF blueprint.
     // Similar to `apply_slot`, but enables the injection of a custom `InjectedControlFlow`.
+    #[allow(clippy::too_many_arguments)]
     pub fn apply_slot_with_control_flow<CF: InjectedControlFlow<S> + Clone>(
         &self,
         pre_state_root: &<S::Storage as Storage>::Root,
@@ -459,7 +463,7 @@ where
         );
 
         tracing::trace!("Selecting blobs");
-        let blob_selector_output = self.select_and_validate_blobs(
+        let (blob_selector_output, _discarded_blobs) = self.select_and_validate_blobs(
             &mut runtime,
             relevant_blobs,
             &mut kernel_with_partially_stale_heights,
@@ -541,6 +545,7 @@ where
             .chain_state()
             .finalize_chain_state(&total_gas, &mut kernel_state_accessor);
 
+        let rollup_height = state.rollup_height_to_access();
         let (state_root, witness, change_set) = {
             // We can't use `if cfg!` here because `materialize_slot` returns different types in native and non-native mode.
             // So we structure this code to make it obvious that we're handling both cases.
@@ -582,6 +587,7 @@ where
             proof_receipts,
             batch_receipts,
             witness,
+            rollup_height,
         }
     }
 

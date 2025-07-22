@@ -44,6 +44,7 @@ pub struct TestStatelessSequencer<R, S: Spec, Da: DaService> {
     tx_status_manager: TxStatusManager<S::Da>,
     _r: PhantomData<R>,
     state_sender: watch::Sender<StateCheckpoint<S>>,
+    api_ledger_db: LedgerDb,
 }
 
 impl<R, S, Da> TestStatelessSequencer<R, S, Da>
@@ -89,6 +90,7 @@ where
             tx_status_manager,
             _r: Default::default(),
             state_sender,
+            api_ledger_db: ledger_db.clone(),
         });
 
         let mut handles = vec![];
@@ -208,6 +210,11 @@ where
     ) -> anyhow::Result<()> {
         let mut inner = self.inner.lock().await;
         inner.storage = update_info.storage;
+
+        self.api_ledger_db
+            .replace_reader(update_info.ledger_reader.clone());
+        self.api_ledger_db
+            .send_notifications_for_slot(update_info.slot_number);
 
         let serialized_batch =
             borsh::to_vec::<Vec<FullyBakedTx>>(&self.take_batch().await.inner)?.into();

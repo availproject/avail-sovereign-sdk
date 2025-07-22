@@ -15,6 +15,9 @@ use super::factory::CallMessageFactory;
 use super::value_setter::{
     ValueSetterChangeLogDiscriminant, ValueSetterChangeLogEntry, ValueSetterHarness,
 };
+use crate::generators::synthetic_load::{
+    SyntheticLoadChangeLogEntry, SyntheticLoadChangeLogEntryDiscriminant,
+};
 use crate::{ChangelogEntry, HarnessModule};
 
 /// A basic call message generator factory that can be used with modules internal to the sovereign sdk
@@ -53,6 +56,8 @@ pub enum BasicChangeLogEntry<S: Spec> {
     Bank(BankChangeLogEntry<S>),
     /// Changes from the value setter module
     ValueSetter(ValueSetterChangeLogEntry),
+    /// Changes from the synthetic load module
+    SyntheticLoad(SyntheticLoadChangeLogEntry),
     /// Changes from the access pattern module
     AccessPattern(AccessPatternChangeLogEntry<S>),
 }
@@ -65,6 +70,8 @@ pub enum BasicChangeLogDiscriminant<S: Spec> {
     Bank(BankChangeLogDiscriminant<S>),
     /// Discriminants from the value setter module
     ValueSetter(ValueSetterChangeLogDiscriminant),
+    /// Discriminant from the synthetic load module
+    SyntheticLoad(SyntheticLoadChangeLogEntryDiscriminant),
     /// Discriminants from the access pattern module
     AccessPattern(AccessPatternChangeLogDiscriminant),
 }
@@ -92,6 +99,10 @@ impl<S: Spec> ChangelogEntry for BasicChangeLogEntry<S> {
                 v.assert_state(Arc::new((*rollup_state_accessor).clone().into()))
                     .await
             }
+            BasicChangeLogEntry::SyntheticLoad(v) => {
+                v.assert_state(Arc::new((*rollup_state_accessor).clone().into()))
+                    .await
+            }
         }
     }
 
@@ -103,6 +114,9 @@ impl<S: Spec> ChangelogEntry for BasicChangeLogEntry<S> {
             }
             BasicChangeLogEntry::AccessPattern(v) => {
                 BasicChangeLogDiscriminant::AccessPattern(v.as_discriminant())
+            }
+            BasicChangeLogEntry::SyntheticLoad(v) => {
+                BasicChangeLogDiscriminant::SyntheticLoad(v.as_discriminant())
             }
         }
     }

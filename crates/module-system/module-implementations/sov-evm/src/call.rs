@@ -1,7 +1,7 @@
 use reth_primitives::revm_primitives::{
     Address, BlockEnv, CfgEnv, CfgEnvWithHandlerCfg, EVMError, HandlerCfg,
 };
-use reth_primitives::{Log as RethLog, TransactionSigned};
+use reth_primitives::TransactionSigned;
 use sov_address::{EthereumAddress, FromVmAddress};
 #[cfg(feature = "native")]
 use sov_modules_api::macros::UniversalWallet;
@@ -81,7 +81,7 @@ where
             Ok(result) => {
                 let is_success = result.is_success();
                 let gas_used = result.gas_used();
-                let logs: Vec<_> = result.into_logs().into_iter().map(RethLog::from).collect();
+                let logs = result.into_logs();
                 tracing::debug!(
                     hash = hex::encode(evm_tx.hash()),
                     gas_used,

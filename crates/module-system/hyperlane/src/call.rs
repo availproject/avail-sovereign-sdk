@@ -179,7 +179,7 @@ where
     ) -> Result<()> {
         let message_id = keccak256_hash(&message.0, state)?;
         let message = Message::decode(message.as_ref())
-            .context(format!("Failed to decode message {}", message_id))?;
+            .context(format!("Failed to decode message {message_id}"))?;
         // Ensure message version is correct
         anyhow::ensure!(
             message.version == MESSAGE_VERSION,

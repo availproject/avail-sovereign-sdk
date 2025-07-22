@@ -468,8 +468,7 @@ impl<S: Spec> Bank<S> {
             .unwrap_or(Amount::ZERO);
         let to_balance = current_to_balance.checked_add(amount).with_context(|| {
             format!(
-                "Account balance overflow for {} when adding {} to current balance {}",
-                to, amount, current_to_balance
+                "Account balance overflow for {to} when adding {amount} to current balance {current_to_balance}"
             )
         })?;
 

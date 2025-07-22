@@ -71,8 +71,7 @@ impl<'de, T: serde::Serialize + FromStr> serde::Deserialize<'de> for Pagination<
             ));
         } else if size > PAGE_SIZE_MAX {
             return Err(serde::de::Error::custom(format!(
-                "page[size] must be less than or equal to {}",
-                PAGE_SIZE_MAX
+                "page[size] must be less than or equal to {PAGE_SIZE_MAX}"
             )));
         }
 
