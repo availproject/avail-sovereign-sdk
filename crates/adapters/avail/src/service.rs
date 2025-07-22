@@ -219,13 +219,6 @@ impl AvailDAService {
             .map(|item| {
                 let submit_data =
                     SubmitData::decode_hex_call(item.encoded.as_ref().unwrap().as_str());
-                let ss58 = item
-                    .signature
-                    .as_ref()
-                    .unwrap()
-                    .ss58_address
-                    .as_ref()
-                    .unwrap();
                 AvailData {
                     data: submit_data.unwrap().data,
                     signer: AccountId::from_str(
@@ -250,13 +243,6 @@ impl AvailDAService {
             .map(|item| {
                 let submit_data =
                     SubmitData::decode_hex_call(item.encoded.as_ref().unwrap().as_str());
-                let ss58 = item
-                    .signature
-                    .as_ref()
-                    .unwrap()
-                    .ss58_address
-                    .as_ref()
-                    .unwrap();
                 AvailData {
                     data: submit_data.unwrap().data,
                     signer: AccountId::from_str(
