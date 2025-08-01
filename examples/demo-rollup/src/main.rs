@@ -8,7 +8,7 @@ use sov_address::MultiAddressEvm;
 use sov_avail_adapter::service::AvailDAService;
 use sov_celestia_adapter::CelestiaService;
 use sov_demo_rollup::{
-    avail_risc0_host_args, celestia_risc0_host_args, mock_da_risc0_host_args, AvailDemoRollup,
+    avail_da_risc0_host_args, celestia_risc0_host_args, mock_da_risc0_host_args, AvailDemoRollup,
     AvailNomtDemoRollup, CelestiaDemoRollup, CelestiaNomtDemoRollup, MockDemoRollup,
     MockNomtDemoRollup,
 };
@@ -151,26 +151,28 @@ async fn run() -> anyhow::Result<()> {
         }
         (SupportedDaLayer::Avail, SupportedStorage::Jmt) => {
             let prover_config = prover_config_disc
-                .map(|config_disc| config_disc.into_config(avail_risc0_host_args()));
+                .map(|config_disc| config_disc.into_config(avail_da_risc0_host_args()));
             let rollup = new_rollup_with_avail_da_and_jmt(
                 &GenesisPaths::from_dir(&args.genesis_config_dir),
                 rollup_config_path,
                 prover_config,
+                stop_at_rollup_height,
             )
             .await
-            .context("Failed to initialize Celestia rollup")?;
+            .context("Failed to initialize Avail rollup")?;
             rollup.run().await
         }
         (SupportedDaLayer::Avail, SupportedStorage::Nomt) => {
             let prover_config = prover_config_disc
-                .map(|config_disc| config_disc.into_config(avail_risc0_host_args()));
+                .map(|config_disc| config_disc.into_config(avail_da_risc0_host_args()));
             let rollup = new_rollup_with_avail_da_and_nomt(
                 &GenesisPaths::from_dir(&args.genesis_config_dir),
                 rollup_config_path,
                 prover_config,
+                stop_at_rollup_height,
             )
             .await
-            .context("Failed to initialize Celestia rollup")?;
+            .context("Failed to initialize Avail rollup")?;
             rollup.run().await
         }
     }
@@ -245,6 +247,7 @@ async fn new_rollup_with_avail_da_and_jmt(
     rt_genesis_paths: &GenesisPaths,
     rollup_config_path: &str,
     prover_config: Option<RollupProverConfig<Risc0>>,
+    stop_at_rollup_height: Option<RollupHeight>,
 ) -> anyhow::Result<Rollup<AvailDemoRollup<Native>, Native>> {
     debug!(
         config_path = rollup_config_path,
@@ -261,7 +264,12 @@ async fn new_rollup_with_avail_da_and_jmt(
 
     let avail_rollup = AvailDemoRollup::<Native>::default();
     avail_rollup
-        .create_new_rollup(rt_genesis_paths, rollup_config, prover_config)
+        .create_new_rollup(
+            rt_genesis_paths,
+            rollup_config,
+            prover_config,
+            stop_at_rollup_height,
+        )
         .await
 }
 
@@ -269,6 +277,7 @@ async fn new_rollup_with_avail_da_and_nomt(
     rt_genesis_paths: &GenesisPaths,
     rollup_config_path: &str,
     prover_config: Option<RollupProverConfig<Risc0>>,
+    stop_at_rollup_height: Option<RollupHeight>,
 ) -> anyhow::Result<Rollup<AvailNomtDemoRollup<Native>, Native>> {
     debug!(
         config_path = rollup_config_path,
@@ -285,7 +294,12 @@ async fn new_rollup_with_avail_da_and_nomt(
 
     let avail_rollup = AvailNomtDemoRollup::<Native>::default();
     avail_rollup
-        .create_new_rollup(rt_genesis_paths, rollup_config, prover_config)
+        .create_new_rollup(
+            rt_genesis_paths,
+            rollup_config,
+            prover_config,
+            stop_at_rollup_height,
+        )
         .await
 }
 
