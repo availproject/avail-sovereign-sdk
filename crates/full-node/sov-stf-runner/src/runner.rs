@@ -101,21 +101,31 @@ where
     let (stf_state, ledger_state) = storage_manager.create_state_for(&block_header)?;
     let ledger_db = LedgerDb::with_reader(ledger_state)?;
 
+    println!("line 104");
+
     let (genesis_state_root, initialized_storage) =
         stf.init_chain(&block_header, stf_state, genesis_params);
 
+    println!("line 109");
     let data_to_commit: SlotCommit<_, Stf::BatchReceiptContents, Stf::TxReceiptContents> =
         SlotCommit::new(genesis_block);
     let mut ledger_change_set =
         ledger_db.materialize_slot(data_to_commit, genesis_state_root.as_ref())?;
 
+    println!("line 115");
     let finalized_slot_changes =
         ledger_db.materialize_latest_finalize_slot(SlotNumber::GENESIS, SlotNumber::GENESIS)?;
 
+    println!("line 119");
     ledger_change_set.merge(finalized_slot_changes);
+
+    println!("line 122");
     storage_manager.save_change_set(&block_header, initialized_storage, ledger_change_set)?;
+
+    println!("line 124");
     storage_manager.finalize(&block_header)?;
 
+    println!("line 128");
     Ok(genesis_state_root)
 }
 

@@ -160,6 +160,9 @@ async fn run() -> anyhow::Result<()> {
             )
             .await
             .context("Failed to initialize Avail rollup")?;
+
+            tracing::info!("New Avail rollup initialized, starting execution");
+
             rollup.run().await
         }
         (SupportedDaLayer::Avail, SupportedStorage::Nomt) => {
@@ -261,6 +264,8 @@ async fn new_rollup_with_avail_da_and_jmt(
                 rollup_config_path
             )
         })?;
+
+    tracing::info!("Rollup config loaded, initializing Avail rollup");
 
     let avail_rollup = AvailDemoRollup::<Native>::default();
     avail_rollup

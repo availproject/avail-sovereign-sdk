@@ -298,6 +298,8 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
 
         let mut storage_manager = self.create_storage_manager(&rollup_config)?;
 
+        info!(?current_finalized_header, "Creating storage for the rollup");
+
         let (prover_storage, ledger_state) =
             storage_manager.create_state_after(&current_finalized_header)?;
         let ledger_db = self.create_ledger_db(ledger_state.clone())?;
@@ -332,7 +334,15 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
                     .get_block_at(rollup_config.runner.genesis_height)
                     .await?;
 
+                tracing::debug!(
+                    rollup_genesis_block = ?rollup_genesis_block,
+                    "Rollup genesis block retrieved"
+                );
+
                 let genesis_header = rollup_genesis_block.header().clone();
+
+                tracing::debug!(?genesis_header, "Rollup genesis header retrieved");
+
                 let genesis_state_root: <<Self::Spec as Spec>::Storage as Storage>::Root =
                     initialize_state::<_, _, _, Self::DaService, _>(
                         &native_stf,
@@ -341,6 +351,12 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
                         genesis_params,
                     )
                     .await?;
+
+                tracing::debug!(
+                    ?genesis_state_root,
+                    ?genesis_header,
+                    "Rollup state initialization is completed"
+                );
 
                 // Re-create bootstrap storage, so it fetches the latest version after initialization.
                 // And can see the latest changes. Otherwise Sequencer won't be able to process any batches,
@@ -365,6 +381,12 @@ pub trait FullNodeBlueprint<M: ExecutionMode>: RollupBlueprint<M> {
                 (prover_storage, prev_state_root, genesis_state_root)
             }
         };
+
+        tracing::debug!(
+            prev_root_hash = hex::encode(prev_state_root.as_ref()),
+            raw_genesis_state_root = hex::encode(genesis_state_root.as_ref()),
+            "Rollup state initialization is started"
+        );
 
         let state_update_info = query_state_update_info(&ledger_db, prover_storage).await?;
 
