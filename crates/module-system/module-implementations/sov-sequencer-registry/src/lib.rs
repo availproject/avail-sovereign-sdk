@@ -231,13 +231,18 @@ impl<S: Spec> SequencerRegistry<S> {
         &self,
         state: &mut Reader,
     ) -> Result<Option<(<S::Da as DaSpec>::Address, S::Address)>, E> {
-        if let Some(da_addr) = self.preferred_sequencer.get(state)? {
+        tracing::debug!("Getting preferred sequencer");
+        let preferred = self.preferred_sequencer.get(state)?;
+        tracing::debug!(?preferred, "Preferred sequencer address found");
+        if let Some(da_addr) = preferred {
+            tracing::debug!(%da_addr, "Preferred sequencer address found");
             // If the preferred sequencer address is set but they're not currently authorized, act like there is no preferred sequencer
             Ok(self
                 .known_sequencers
                 .get(&da_addr, state)?
                 .map(|seq| (da_addr, seq.address)))
         } else {
+            tracing::debug!("No preferred sequencer address found");
             Ok(None)
         }
     }

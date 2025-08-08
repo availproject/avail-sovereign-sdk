@@ -396,6 +396,10 @@ where
 
         let stop_at_rollup_height = self.stop_at_rollup_height;
         let shutdown_receiver = self.shutdown_receiver.clone();
+        info!(
+            "Starting main loop with next_da_height: {}, stop_at_rollup_height: {:?}",
+            next_da_height, stop_at_rollup_height
+        );
         loop {
             if self.stop_at_rollup_height.is_some() {
                 // Rollup is performing an upgrade procedure. We wait until the next_da_height is finalized.
@@ -483,17 +487,27 @@ where
     ) -> anyhow::Result<Option<NextDaHeightToProcess>> {
         let loop_start = std::time::Instant::now();
         let prev_state_root = self.get_state_root().clone();
-        debug!("Requesting DA block");
+        info!(
+            "Starting process_next_slot for DA height: {:?}",
+            next_da_height
+        );
+        debug!("Requesting DA block for DA height: {:?}", next_da_height);
 
         let mut transaction_count = 0;
         let mut batch_count = 0;
         let get_block_start = std::time::Instant::now();
+        debug!("Fetching DA block at height: {:?}", next_da_height);
         let filtered_block = if next_da_height <= self.sync_fetcher.last_finalized_height {
-            // no reorg will happen for this height, it is safe to just pull it from the fetcher,
-            // which could have this block fetcher already
+            debug!(
+                "No reorg expected for height: {:?}, using sync_fetcher",
+                next_da_height
+            );
             self.sync_fetcher.get_block_at(next_da_height).await?
         } else {
-            // Requests height might re-org
+            debug!(
+                "Possible reorg for height: {:?}, using reorg-aware fetch",
+                next_da_height
+            );
             crate::da_utils::fetch_block_reorg_aware(
                 self.da_service.as_ref(),
                 self.sync_state.as_ref(),
@@ -503,7 +517,15 @@ where
             .await?
         };
         let get_block_time = get_block_start.elapsed();
+        debug!(
+            "Fetched DA block at height: {:?} in {:?}",
+            next_da_height, get_block_time
+        );
 
+        debug!(
+            "Preparing storage for DA block at height: {:?}",
+            next_da_height
+        );
         let (stf_pre_state, filtered_block) = self
             .state_manager
             .prepare_storage(filtered_block, &self.da_service)
@@ -512,10 +534,14 @@ where
                 tracing::warn!(?e, "Error during prepare_storage");
                 e
             })?;
+        debug!(
+            "Storage prepared for DA block at height: {:?}",
+            next_da_height
+        );
 
         let filtered_block_header = filtered_block.header().clone();
         if next_da_height != filtered_block_header.height() {
-            debug!(
+            info!(
                 existing_next_da_height = next_da_height,
                 new_next_da_height = filtered_block_header.height(),
                 "Updating next_da_height after storage_manager, as reorg happened."
@@ -528,6 +554,10 @@ where
 
         // STF execution
         let stf_execution_start = std::time::Instant::now();
+        debug!(
+            "Extracting relevant blobs from DA block at height: {:?}",
+            next_da_height
+        );
         let mut relevant_blobs = self.da_service.extract_relevant_blobs(&filtered_block);
         let batch_blobs = &mut relevant_blobs.batch_blobs;
         let proof_blobs = &relevant_blobs.proof_blobs;
@@ -557,6 +587,7 @@ where
         let da_extraction_time = stf_execution_start.elapsed();
 
         let apply_slot_start = std::time::Instant::now();
+        info!("Applying slot for DA block at height: {:?}", next_da_height);
         let slot_result = self.stf.apply_slot(
             self.state_manager.get_state_root(),
             stf_pre_state,
@@ -566,6 +597,10 @@ where
             ExecutionContext::Node,
         );
         let apply_slot_time = apply_slot_start.elapsed();
+        debug!(
+            "Slot applied for DA block at height: {:?} in {:?}",
+            next_da_height, apply_slot_time
+        );
 
         // --- Before destructuring the receipt, extract some data for metrics ---
         let batch_bytes_processed: u64 = relevant_blobs
@@ -589,17 +624,29 @@ where
         // --- End metric extraction ---
 
         let get_relevant_proofs_start = std::time::Instant::now();
+        debug!(
+            "Getting extraction proofs for DA block at height: {:?}",
+            next_da_height
+        );
         // Get merkle proofs for the relevant blobs
         let relevant_proofs = self
             .da_service
             .get_extraction_proof(&filtered_block, &relevant_blobs)
             .await;
         let get_relevant_proofs_time = get_relevant_proofs_start.elapsed();
+        debug!(
+            "Extraction proofs obtained for DA block at height: {:?} in {:?}",
+            next_da_height, get_relevant_proofs_time
+        );
         // Handling executed data
         let mut data_to_commit = SlotCommit::new(filtered_block);
         for receipt in slot_result.batch_receipts {
             batch_count += 1;
             transaction_count += receipt.tx_receipts.len();
+            debug!(
+                "Adding batch receipt with {} transactions",
+                receipt.tx_receipts.len()
+            );
             data_to_commit.add_batch(receipt);
         }
 
@@ -617,6 +664,10 @@ where
             Self::collect_aggregated_proofs(slot_result.proof_receipts.into_iter());
 
         let processing_changes_start = std::time::Instant::now();
+        info!(
+            "Processing STF changes for DA block at height: {:?}",
+            next_da_height
+        );
         self.state_manager
             .process_stf_changes(
                 &self.da_service,
@@ -627,10 +678,18 @@ where
                 aggregated_proofs,
             )
             .await?;
-        trace!("Stf changes processing is completed");
+        trace!(
+            "Stf changes processing is completed for DA block at height: {:?}",
+            next_da_height
+        );
 
         // Updating counters and metrics
         self.sync_state.update_synced(next_da_height);
+        info!(
+            "Block execution complete for DA height: {:?} (elapsed: {:?})",
+            next_da_height,
+            loop_start.elapsed()
+        );
         debug!(
             time = ?loop_start.elapsed(),
             "Block execution complete"
@@ -661,6 +720,7 @@ where
                 extraction_proof_time: get_relevant_proofs_time,
                 processing_changes_time: processing_changes_start.elapsed(),
             };
+            debug!("Runner metrics tracked");
             metrics.track_runner_metrics(point);
         });
 
@@ -679,6 +739,10 @@ where
             );
         }
 
+        info!(
+            "process_next_slot finished for DA height: {:?}",
+            next_da_height
+        );
         Ok(Some(next_da_height + 1))
     }
 

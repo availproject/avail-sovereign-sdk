@@ -5,7 +5,7 @@ use std::convert::Infallible;
 use sov_blob_storage::BlobStorage;
 use sov_chain_state::ChainState;
 use sov_modules_api::capabilities::{BlobSelectorOutput, BlockGasInfo, RollupHeight};
-use sov_modules_api::prelude::UnwrapInfallible;
+use sov_modules_api::prelude::{tracing, UnwrapInfallible};
 use sov_modules_api::runtime::capabilities::{BlobSelector, Kernel as KernelTrait};
 #[cfg(feature = "native")]
 use sov_modules_api::AccessoryStateReaderAndWriter;
@@ -16,7 +16,6 @@ use sov_modules_api::{
 use sov_rollup_interface::common::SlotNumber;
 use sov_rollup_interface::da::RelevantBlobIters;
 use sov_state::{Kernel, Storage, User};
-
 /// A kernel supporting based sequencing with soft confirmations
 pub struct SoftConfirmationsKernel<'a, S: Spec> {
     pub chain_state: &'a mut ChainState<S>,
@@ -63,6 +62,7 @@ impl<S: Spec> BlobSelector for SoftConfirmationsKernel<'_, S> {
         BlobSelectorOutput<SelectedBlob<S, IterableBatchWithId<S, CF>>>,
         Vec<HexHash>,
     )> {
+        tracing::debug!("[get_blobs_for_this_slot] Selecting blobs for this slot");
         self.blob_storage
             .get_blobs_for_this_slot(current_blobs, state, cf)
     }

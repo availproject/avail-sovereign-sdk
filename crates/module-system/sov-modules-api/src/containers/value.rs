@@ -96,7 +96,11 @@ where
     {
         let key = self.slot_key();
         tracing::trace!(%key, "Setting state value");
-        state.set(&key, self.slot_value(value))
+        // Debug: print the length and hex of the bytes being written
+        let slot_value = self.slot_value(value);
+        let bytes = slot_value.value();
+        tracing::info!(len = bytes.len(), hex = %hex::encode(bytes), "StateValue bytes being written");
+        state.set(&key, slot_value)
     }
 
     /// Gets the value from state or returns None if the value is absent.
@@ -105,7 +109,7 @@ where
         state: &mut Reader,
     ) -> Result<Option<V>, Reader::Error> {
         let key = self.slot_key();
-        tracing::trace!(%key, "Getting state value");
+        tracing::debug!(%key, "Getting state value");
         state.get_decoded(&key, self.codec())
     }
 

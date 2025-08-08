@@ -367,6 +367,7 @@ where
         relevant_blobs: RelevantBlobIters<&mut [<S::Da as DaSpec>::BlobTransaction]>,
         execution_context: ExecutionContext,
     ) -> ApplySlotOutput<S::InnerZkvm, S::OuterZkvm, S::Da, Self> {
+        tracing::info!("Applying slot with header: {:?}", slot_header);
         self.apply_slot_with_control_flow(
             pre_state_root,
             pre_state,
@@ -396,6 +397,7 @@ where
         BlobSelectorOutput<SelectedBlob<S, IterableBatchWithId<S, CF>>>,
         Vec<HexHash>,
     ) {
+        tracing::debug!("[select_and_validate_blobs] Selecting blobs for this slot");
         runtime
             .blob_selector()
             .get_blobs_for_this_slot(relevant_blobs, kernel, cf)
@@ -422,25 +424,39 @@ where
         execution_context: ExecutionContext,
         cf: CF,
     ) -> ApplySlotOutput<S::InnerZkvm, S::OuterZkvm, S::Da, Self> {
+        tracing::info!(
+            "[apply_slot_with_control_flow] Starting slot application with header: {:?}",
+            slot_header
+        );
         let mut runtime = RT::default();
+        tracing::debug!("[apply_slot_with_control_flow] Created default runtime");
         // Sanity check that gas limits are set correctly. This is already checked at genesis, but we check again in case
         // Someone modifies the code after genesis.
         assert!(<S as GasSpec>::process_tx_pre_exec_checks_gas()
             .dim_is_less_than(&<S as GasSpec>::max_tx_check_costs()), "Gas misconfiguration: PROCESS_TX_PRE_EXEC_GAS must be less than MAX_SEQUENCER_EXEC_GAS_PER_TX");
+        tracing::debug!("[apply_slot_with_control_flow] Gas sanity check passed");
 
         start_timer!(start_slot);
 
         let mut state = StateCheckpoint::with_witness(pre_state, witness, &runtime.kernel());
+        tracing::debug!("[apply_slot_with_control_flow] StateCheckpoint created with witness");
         // First, we bootstrap the kernel from the previous state. The
         // `true_slot_number`, will *always* be stale because it's leftover from the
         // previous slot.
         let mut kernel_with_stale_heights = runtime.kernel().accessor(&mut state);
+        tracing::debug!("[apply_slot_with_control_flow] Kernel accessor created");
 
         // `visible_slot_number`, and `rollup_height` may or may not be stale. If we don't produce a rollup block,
         // during this slot, then the visible slot number and rollup height will not progress, so the old values are still accurate.
         let old_true_slot_number = kernel_with_stale_heights.true_slot_number();
         let old_visible_slot_number = kernel_with_stale_heights.visible_slot_number();
         let old_rollup_height = kernel_with_stale_heights.rollup_height_to_access();
+        tracing::debug!(
+            ?old_true_slot_number,
+            ?old_visible_slot_number,
+            ?old_rollup_height,
+            "[apply_slot_with_control_flow] Old slot/rollup heights"
+        );
 
         // WARNING: The true slot number gets updated in the
         // `ChainState::synchronize_chain` method. The visible slot number gets
@@ -449,6 +465,7 @@ where
         // Be careful to respect the call order: the `ChainState` hooks MUST
         // be called before the `BlobStorage`'s, which MUST be called before
         // the `Runtime`'s slot hooks.
+        tracing::info!("[apply_slot_with_control_flow] Synchronizing chain state");
         runtime.chain_state().synchronize_chain(
             slot_header,
             pre_state_root,
@@ -456,12 +473,14 @@ where
         );
 
         let mut kernel_with_partially_stale_heights = kernel_with_stale_heights;
+        tracing::debug!("[apply_slot_with_control_flow] Chain state synchronized");
         assert_ne!(
             kernel_with_partially_stale_heights.true_slot_number(),
             old_true_slot_number,
             "Sanity check failed (the true slot number didn't progress as expected), this is a bug and should be reported."
         );
 
+        tracing::info!("[apply_slot_with_control_flow] Selecting and validating blobs");
         tracing::trace!("Selecting blobs");
         let (blob_selector_output, _discarded_blobs) = self.select_and_validate_blobs(
             &mut runtime,
@@ -470,6 +489,7 @@ where
             cf,
         );
         tracing::trace!("Done selecting blobs");
+        tracing::debug!("[apply_slot_with_control_flow] Blobs selected and validated");
 
         // The blob selector *must* not mutate the visible slot number or rollup height internally. instead, it must return an output
         // indicating whether a rollup block should be created and, if so, what the new visible slot number should be.
@@ -485,6 +505,7 @@ where
         );
 
         if blob_selector_output.creates_rollup_block() {
+            tracing::info!("[apply_slot_with_control_flow] Rollup block will be created");
             let visible_slot_number = kernel_with_partially_stale_heights
                 .visible_slot_number()
                 .advance(blob_selector_output.visible_slot_number_increase);
@@ -508,6 +529,7 @@ where
                 "Sanity check failed (the rollup height didn't progress as expected), this is a bug and should be reported."
             );
         } else {
+            tracing::info!("[apply_slot_with_control_flow] No rollup block will be created; no blobs will be executed");
             // Defensive programming; if we don't create a rollup block, we aren't allowed to execute any blobs.
             // We panic if this invariant is violated, beccause in this case the rollup block hooks will not be executed correctly leading
             // To potentially inconsistent state.
@@ -519,17 +541,30 @@ where
 
         let mut kernel = kernel_with_partially_stale_heights;
         let new_rollup_height = kernel.rollup_height_to_access();
+        tracing::debug!(
+            ?new_rollup_height,
+            "[apply_slot_with_control_flow] New rollup height after blob selection"
+        );
 
         // Compute the state root to show to transactions during execution.
         let visible_hash = runtime
             .chain_state()
             .visible_hash_for(new_rollup_height, &mut kernel)
             .expect("The current visible hash should be possible to compute at this point because the chain-state should have synchronized. This is a bug. Please report it.");
+        tracing::debug!(
+            ?visible_hash,
+            "[apply_slot_with_control_flow] Computed visible hash for execution"
+        );
 
         save_elapsed!(blob_selection_time SINCE start_slot);
 
         let create_rollup_block = blob_selector_output.creates_rollup_block();
+        tracing::debug!(
+            ?create_rollup_block,
+            "[apply_slot_with_control_flow] create_rollup_block flag"
+        );
 
+        tracing::info!("[apply_slot_with_control_flow] Applying batches in user space");
         let (total_gas, proof_receipts, batch_receipts, mut state) = self
             .apply_batches_in_user_space(
                 &mut runtime,
@@ -538,15 +573,30 @@ where
                 execution_context,
                 visible_hash,
             );
+        tracing::debug!(
+            ?total_gas,
+            batch_receipts_count = batch_receipts.len(),
+            proof_receipts_count = proof_receipts.len(),
+            "[apply_slot_with_control_flow] Batches applied"
+        );
 
         let mut kernel_state_accessor = runtime.kernel().accessor(&mut state);
+        tracing::debug!(
+            "[apply_slot_with_control_flow] Kernel state accessor for finalization created"
+        );
 
         runtime
             .chain_state()
             .finalize_chain_state(&total_gas, &mut kernel_state_accessor);
+        tracing::info!("[apply_slot_with_control_flow] Chain state finalized");
 
         let rollup_height = state.rollup_height_to_access();
+        tracing::debug!(
+            ?rollup_height,
+            "[apply_slot_with_control_flow] Final rollup height"
+        );
         let (state_root, witness, change_set) = {
+            tracing::info!("[apply_slot_with_control_flow] Materializing slot");
             // We can't use `if cfg!` here because `materialize_slot` returns different types in native and non-native mode.
             // So we structure this code to make it obvious that we're handling both cases.
             #[cfg(not(feature = "native"))]
@@ -581,6 +631,7 @@ where
             }
         };
 
+        tracing::info!("[apply_slot_with_control_flow] Slot application complete");
         ApplySlotOutput::<S::InnerZkvm, S::OuterZkvm, S::Da, Self> {
             state_root,
             change_set,

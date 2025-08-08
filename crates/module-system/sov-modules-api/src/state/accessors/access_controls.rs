@@ -45,9 +45,27 @@ macro_rules! inner_impl_charge_gas_state_infallible_reader {
             Codec: StateCodec,
             Codec::ValueCodec: StateItemCodec<V>,
         {
+            tracing::debug!(%storage_key, "3Getting state value");
             let storage_value = <Self as StateReader<$namespace>>::get(self, storage_key)?;
-            Ok(storage_value
-                .map(|storage_value| codec.value_codec().decode_unwrap(storage_value.value())))
+            match &storage_value {
+                Some(val) => {
+                    // Try Debug first, fallback to hex if not available
+                    #[allow(unused_imports)]
+                    use std::fmt::Debug;
+                    // If SlotValue: Debug, print it, else print as hex
+                    // SlotValue is usually a wrapper around Vec<u8>
+                    let bytes = val.value();
+                    let hex = hex::encode(bytes);
+                    tracing::debug!(?hex, len = bytes.len(), "Got storage value (hex encoded)");
+                },
+                None => {
+                    tracing::debug!("No storage value found");
+                }
+            }
+            let res = storage_value
+                .map(|storage_value| codec.value_codec().decode_unwrap(storage_value.value()));
+            tracing::debug!("Decoded storage value");
+            Ok(res)
         }
     };
 }
@@ -193,8 +211,10 @@ impl<S: Spec> StateReader<Accessory> for AccessoryStateCheckpoint<'_, S> {
     {
         let storage_value = <Self as StateReader<Accessory>>::get(self, storage_key)?;
 
-        Ok(storage_value
-            .map(|storage_value| codec.value_codec().decode_unwrap(storage_value.value())))
+        let res = storage_value
+            .map(|storage_value| codec.value_codec().decode_unwrap(storage_value.value()));
+
+        Ok(res)
     }
 }
 

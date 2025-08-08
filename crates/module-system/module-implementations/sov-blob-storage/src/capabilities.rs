@@ -1081,17 +1081,27 @@ impl<S: Spec> BlobStorage<S> {
         BlobSelectorOutput<SelectedBlob<S, IterableBatchWithId<S, CF>>>,
         Vec<HexHash>,
     )> {
+        tracing::info!("[get_blobs_for_this_slot] Called for new slot");
         let mut discarded_blobs = Vec::default();
+
+        tracing::debug!("[get_blobs_for_this_slot] Current blobs received");
 
         // If `DEFERRED_SLOTS_COUNT` is 0, we treat the rollup as having no preferred sequencer.
         // In this case, we just process blobs in the order that they appeared on the DA layer
         if config_deferred_slots_count() == 0 {
+            tracing::info!(
+                "[get_blobs_for_this_slot] DEFERRED_SLOTS_COUNT == 0, using based sequencer path"
+            );
             let selection = self.select_blobs_as_based_sequencer_inner(
                 current_blobs,
                 &mut discarded_blobs,
                 state,
             );
-
+            tracing::debug!(
+                selected_blobs = selection.selected_blobs.len(),
+                visible_slot_number_increase = selection.visible_slot_number_increase,
+                "[get_blobs_for_this_slot] Based sequencer selection complete"
+            );
             return Ok((
                 BlobSelectorOutput {
                     selected_blobs: selection
@@ -1105,26 +1115,41 @@ impl<S: Spec> BlobStorage<S> {
             ));
         }
 
+        tracing::info!(
+            "[get_blobs_for_this_slot] DEFERRED_SLOTS_COUNT > 0, checking for preferred sequencer"
+        );
+
         // If there's a preferred sequencer, sequence accordingly.
         if let Some((pref_da, pref_seq)) = self.get_preferred_sequencer(state) {
-            return Ok((
-                self.select_blobs_for_preferred_sequencer(
-                    current_blobs,
-                    &mut discarded_blobs,
-                    state,
-                    &pref_da,
-                    pref_seq,
-                    cf,
-                ),
-                discarded_blobs,
-            ));
+            tracing::info!("[get_blobs_for_this_slot] Preferred sequencer detected, using preferred sequencer path");
+            let output = self.select_blobs_for_preferred_sequencer(
+                current_blobs,
+                &mut discarded_blobs,
+                state,
+                &pref_da,
+                pref_seq,
+                cf,
+            );
+            tracing::debug!(
+                selected_blobs = output.selected_blobs.len(),
+                visible_slot_number_increase = output.visible_slot_number_increase,
+                "[get_blobs_for_this_slot] Preferred sequencer selection complete"
+            );
+            return Ok((output, discarded_blobs));
         }
 
         // Otherwise, we're configured for a preferred sequencer but one doesn't exist. This usually means that the preferred sequencer was slashed.
         // Entery recovery mode.
+        tracing::warn!(
+            "[get_blobs_for_this_slot] No preferred sequencer found, entering recovery mode"
+        );
         let selection =
             self.select_blobs_in_recovery_mode(current_blobs, &mut discarded_blobs, state);
-
+        tracing::debug!(
+            selected_blobs = selection.selected_blobs.len(),
+            visible_slot_number_increase = selection.visible_slot_number_increase,
+            "[get_blobs_for_this_slot] Recovery mode selection complete"
+        );
         Ok((
             BlobSelectorOutput {
                 selected_blobs: selection

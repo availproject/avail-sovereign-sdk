@@ -160,9 +160,7 @@ async fn run() -> anyhow::Result<()> {
             )
             .await
             .context("Failed to initialize Avail rollup")?;
-
-            tracing::info!("New Avail rollup initialized, starting execution");
-
+            tracing::info!("Avail rollup initialized successfully");
             rollup.run().await
         }
         (SupportedDaLayer::Avail, SupportedStorage::Nomt) => {
