@@ -75,9 +75,9 @@ impl schemars::JsonSchema for AvailAddress {
     }
 }
 
-impl BorshSerialize for AvailAddress {
-    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        borsh::BorshSerialize::serialize(&<AccountId as AsRef<[u8]>>::as_ref(&self.0), writer)
+impl borsh::BorshSerialize for AvailAddress {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_all(&self.0 .0)
     }
 }
 
