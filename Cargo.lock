@@ -12149,7 +12149,6 @@ dependencies = [
  "static_assertions",
  "thiserror 1.0.64",
  "tokio",
- "tracing",
 ]
 
 [[package]]
