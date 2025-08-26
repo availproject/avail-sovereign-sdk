@@ -19,7 +19,7 @@ impl BlockHeaderTrait for CustomAvailHeader {
     }
 
     fn hash(&self) -> Self::Hash {
-        AvailHash(self.header.parent_hash)
+        AvailHash(self.header.hash())
     }
 
     fn height(&self) -> u64 {
