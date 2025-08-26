@@ -1,7 +1,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
 
-#[derive(JsonSchema, PartialEq, Clone, Deserialize, Serialize)]
+#[derive(JsonSchema, Debug, PartialEq, Clone, Deserialize, Serialize)]
 pub struct AvailDAConfig {
     pub http_api_url: String,
     pub ws_api_url: String,
