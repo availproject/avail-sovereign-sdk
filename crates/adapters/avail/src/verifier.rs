@@ -1,18 +1,44 @@
+use avail_rust_core::{rpc::kate::DataProof, AppId, H256};
+
 use borsh::{BorshDeserialize, BorshSerialize};
-use serde::{Deserialize, Serialize};
-use sov_rollup_interface::da::{DaSpec, DaVerifier};
-use sov_rollup_interface::node::da::{RelevantBlobs, RelevantProofs};
-use thiserror::Error;
+use sov_rollup_interface::da::{DaSpec, DaVerifier, RelevantBlobs, RelevantProofs};
 
-use crate::spec::DaLayerSpec;
+use crate::types::{
+    address::AvailAddress, blob::AvailDABlob, hash::AvailHash, header::CustomAvailHeader,
+};
 
-#[derive(Clone)]
-pub struct Verifier;
+#[derive(Debug, Clone, Default, PartialEq, Eq, BorshDeserialize, BorshSerialize)]
+pub struct AvailDASpec;
 
-impl DaVerifier for Verifier {
-    type Spec = DaLayerSpec;
+impl DaSpec for AvailDASpec {
+    type SlotHash = AvailHash;
 
-    type Error = ();
+    type BlockHeader = CustomAvailHeader;
+
+    type BlobTransaction = AvailDABlob;
+
+    type TransactionId = H256;
+
+    type Address = AvailAddress;
+
+    type InclusionMultiProof = DataProof;
+
+    type CompletenessProof = DataProof;
+
+    type ChainParams = AppId;
+}
+
+#[derive(Clone, Default)]
+pub struct AvailDAVerifier;
+
+impl DaVerifier for AvailDAVerifier {
+    type Spec = AvailDASpec;
+
+    type Error = anyhow::Error;
+
+    fn new(_params: <Self::Spec as DaSpec>::ChainParams) -> Self {
+        Self {}
+    }
 
     // Verify that the given list of blob transactions is complete and correct.
     // NOTE: Function return unit since application client already verifies application data.
@@ -25,10 +51,6 @@ impl DaVerifier for Verifier {
             <Self::Spec as DaSpec>::CompletenessProof,
         >,
     ) -> Result<(), Self::Error> {
-        todo!()
-    }
-
-    fn new(_params: <Self::Spec as DaSpec>::ChainParams) -> Self {
-        Verifier {}
+        Ok(())
     }
 }
