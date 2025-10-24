@@ -15,7 +15,7 @@ workspace = true
 avail-rust-core = { git = "https://github.com/availproject/avail-rust", tag = "v0.2.9" }
 sov-rollup-interface = { workspace = true }
 borsh = { workspace = true, features = ["bytes"] }
-bytes = { version = "1.2.1", features = ["serde"] }
+bytes = { workspace = true, features = ["serde"] }
 async-trait = { workspace = true }
 serde = { workspace = true }
 schemars = { workspace = true, features = ["derive"] }

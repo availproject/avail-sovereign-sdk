@@ -14,6 +14,11 @@ pub struct AvailDAConfig {
     // The signer's key to use when submitting proofs and batches
     pub signer_key: String,
 
+    // Turbo DA configurations
+    pub turbo_da_enabled: bool,
+    pub turbo_da_url: String,
+    pub turbo_da_api_key: String,
+
     // Backoff policy configurations
     // Minimal time to wait before reattempting to request to avail rpc.
     pub backoff_min_delay_secs: Option<u64>,

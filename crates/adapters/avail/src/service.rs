@@ -1,24 +1,25 @@
+use std::time::Duration;
+
+use anyhow::anyhow;
 use avail_rust_client::avail::data_availability::tx::SubmitData;
+use avail_rust_client::avail_rust_core::AppId;
 use avail_rust_client::avail_rust_core::rpc::kate::{DataProof, TxDataRoots};
 use avail_rust_client::avail_rust_core::rpc::system::fetch_extrinsics_v1_types::{
     EncodeSelector, SignatureFilter,
 };
-use avail_rust_client::avail_rust_core::AppId;
+use avail_rust_client::subxt_core::tx;
 use avail_rust_client::{
-    AccountId, AccountIdExt, Client, HashNumber, Keypair, KeypairExt, Options,
-    TransactionDecodable, H256,
+    AccountId, AccountIdExt, Client, H256, HashNumber, Keypair, KeypairExt, Options,
+    TransactionDecodable,
 };
-
+use backon::ExponentialBuilder;
+use reqwest::Client as rClient;
 use sov_rollup_interface::common::HexHash;
 use sov_rollup_interface::da::{DaProof, DaSpec, RelevantBlobs, RelevantProofs, Time};
 use sov_rollup_interface::node::da::{
-    run_maybe_retryable_async_fn_with_retries, DaService, MaybeRetryable, SubmitBlobReceipt,
+    DaService, MaybeRetryable, SubmitBlobReceipt, run_maybe_retryable_async_fn_with_retries,
 };
-
-use anyhow::anyhow;
-use backon::ExponentialBuilder;
 use sp_core::blake2_256;
-use std::time::Duration;
 use tokio::sync::oneshot;
 use tracing::{debug, error, info, instrument, trace, warn};
 
@@ -37,6 +38,11 @@ pub struct AvailDAService {
     pub proof_app_id: AppId,
     pub batch_app_id: AppId,
     pub signer: Keypair,
+
+    pub turbo_da_enabled: bool,
+    pub turbo_da_url: String,
+    pub turbo_da_api_key: String,
+
     backoff_policy: ExponentialBuilder,
 }
 
@@ -262,6 +268,12 @@ impl AvailDAService {
         })?;
         debug!("Keypair created successfully");
 
+        if config.turbo_da_enabled {
+            info!("Turbo DA is enabled");
+            debug!("Turbo DA url: {}", config.turbo_da_url);
+            debug!("Turbo DA api key: {}", config.turbo_da_api_key);
+        }
+
         // NOTE: Current exponential backoff policy defaults:
         // jitter: false, factor: 2, min_delay: 1s, max_delay: 60s, max_times: 3,
         let backoff_policy = ExponentialBuilder::default()
@@ -281,6 +293,9 @@ impl AvailDAService {
             proof_app_id: AppId(config.proof_app_id),
             batch_app_id: AppId(config.batch_app_id),
             signer: account,
+            turbo_da_enabled: config.turbo_da_enabled,
+            turbo_da_url: config.turbo_da_url,
+            turbo_da_api_key: config.turbo_da_api_key,
             backoff_policy,
         })
     }
@@ -383,33 +398,56 @@ impl AvailDAService {
             data.len(),
             app_id.0
         );
-        let submittable_tx = self
-            .client
-            .tx()
-            .data_availability()
-            .submit_data(data.to_vec());
-        trace!("Submittable transaction created");
-        let submitted_tx = submittable_tx
-            .sign_and_submit(&self.signer, Options::new(Some(app_id.0)))
-            .await?;
 
-        // Fetching Transaction Receipt
-        let receipt = submitted_tx.receipt(false).await?;
-        let Some(receipt) = receipt else {
-            return Err(anyhow!("Transaction got dropped."));
-        };
+        let res;
+        if self.turbo_da_enabled {
+            debug!("Submitting data via Turbo DA");
 
-        // Fetching Block State
-        let block_state = receipt.block_state().await?;
-        match block_state {
-            avail_rust_client::BlockState::Included => {
-                debug!("Block is included but not yet finalized")
+            let http_client = reqwest::Client::new();
+            let result = self
+                .submit_data_to_turbo_da(
+                    &http_client,
+                    data,
+                    10, // max_attempts
+                )
+                .await?;
+
+            debug!(
+                "Turbo DA finalized at block {} with hash {:?}",
+                result.block_number, result.block_hash
+            );
+
+            Ok(result.block_hash)
+        } else {
+            let submittable_tx = self
+                .client
+                .tx()
+                .data_availability()
+                .submit_data(data.to_vec());
+            trace!("Submittable transaction created");
+            let submitted_tx = submittable_tx
+                .sign_and_submit(&self.signer, Options::new(Some(app_id.0)))
+                .await?;
+
+            // Fetching Transaction Receipt
+            let receipt = submitted_tx.receipt(false).await?;
+            let Some(receipt) = receipt else {
+                return Err(anyhow!("Transaction got dropped."));
+            };
+
+            // Fetching Block State
+            let block_state = receipt.block_state().await?;
+            match block_state {
+                avail_rust_client::BlockState::Included => {
+                    debug!("Block is included but not yet finalized")
+                }
+                avail_rust_client::BlockState::Finalized => debug!("Block is finalized"),
+                avail_rust_client::BlockState::Discarded => debug!("Block is discarded"),
+                avail_rust_client::BlockState::DoesNotExist => debug!("Block does not exist"),
             }
-            avail_rust_client::BlockState::Finalized => debug!("Block is finalized"),
-            avail_rust_client::BlockState::Discarded => debug!("Block is discarded"),
-            avail_rust_client::BlockState::DoesNotExist => debug!("Block does not exist"),
+            res = submitted_tx.tx_hash;
         }
-        let res = submitted_tx.tx_hash;
+
         debug!(
             "Data submitted successfully, transaction hash: {:?} and blob hash: {:?}",
             res,
@@ -417,6 +455,28 @@ impl AvailDAService {
         );
         Ok(res)
     }
+}
+
+// --- Response Structs ---
+#[derive(Debug, Deserialize)]
+struct TurboDAResponse {
+    submission_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TurboDAStatusResponse {
+    error: String,
+    id: String,
+    state: String,
+    data: Option<TurboDAStatusData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TurboDAStatusData {
+    block_number: u64,
+    block_hash: String,
+    tx_index: u64,
+    tx_hash: String,
 }
 
 impl AvailDAService {
@@ -436,6 +496,107 @@ impl AvailDAService {
         converted
     }
 
+    // Submits data to Turbo DA and polls until finalized
+    async fn submit_data_to_turbo_da(
+        &self,
+        client: &rClient,
+        data: &[u8],
+        max_attempts: usize,
+    ) -> Result<H256, anyhow::Error> {
+        // Step 1: POST to /v1/submit_raw_data
+        let post_url = format!("{}/v1/submit_raw_data", self.turbo_da_url);
+        debug!("Submitting data to Turbo DA at: {}", post_url);
+
+        let post_resp = client
+            .post(&post_url)
+            .header("Content-Type", "application/octet-stream")
+            .header("x-api-key", self.turbo_da_api_key.clone())
+            .body(data.to_vec())
+            .send()
+            .await
+            .map_err(|e| anyhow!("failed to send Turbo DA POST: {}", e))?;
+
+        if !post_resp.status().is_success() {
+            let status = post_resp.status();
+            let body = post_resp.text().await.unwrap_or_default();
+            return Err(anyhow!(
+                "Turbo DA POST failed: status {} body: {}",
+                status,
+                body
+            ));
+        }
+
+        let post_json: TurboDAResponse = post_resp.json().await?;
+        let submission_id = post_json.submission_id;
+        debug!("Turbo DA submission ID: {}", submission_id);
+
+        // Step 2: Poll /v1/get_submission_info
+        let get_url = format!(
+            "{}/v1/get_submission_info?submission_id={}",
+            self.turbo_da_url, submission_id
+        );
+
+        for attempt in 1..=max_attempts {
+            let resp = client
+                .get(&get_url)
+                .header("x-api-key", self.turbo_da_api_key.clone())
+                .send()
+                .await;
+
+            match resp {
+                Ok(resp) => {
+                    let status = resp.status();
+                    let body = resp.text().await.unwrap_or_default();
+
+                    if !status.is_success() {
+                        warn!("Turbo DA status check failed: {}", status);
+                    } else {
+                        if let Ok(status_json) =
+                            serde_json::from_str::<TurboDAStatusResponse>(&body)
+                        {
+                            debug!(
+                                "Attempt {}/{} | State: {}",
+                                attempt, max_attempts, status_json.state
+                            );
+                            if status_json.state == "Finalized" {
+                                if let Some(data) = status_json.data {
+                                    let tx_hash = H256::from_slice(&hex::decode(
+                                        data.tx_hash.trim_start_matches("0x"),
+                                    )?);
+                                    debug!("Turbo DA finalized: transaction hash {:?}", tx_hash);
+                                    return Ok(tx_hash);
+                                } else {
+                                    return Err(anyhow!(
+                                        "Finalized but no data in Turbo DA response"
+                                    ));
+                                }
+                            }
+                        } else {
+                            warn!("Invalid JSON from Turbo DA: {}", body);
+                        }
+                    }
+                }
+                Err(err) => {
+                    warn!(
+                        "Turbo DA request failed (attempt {}/{}): {:?}",
+                        attempt, max_attempts, err
+                    );
+                }
+            }
+
+            // exponential backoff with cap
+            let sleep_secs = std::cmp::min(30, 2 << attempt);
+            debug!("Sleeping {}s before next poll...", sleep_secs);
+            sleep(Duration::from_secs(sleep_secs as u64)).await;
+        }
+
+        Err(anyhow!(
+            "Turbo DA submission {} did not finalize within {} attempts",
+            submission_id,
+            max_attempts
+        ))
+    }
+
     async fn fetch_and_process_blobs(
         &self,
         block_number: u32,
@@ -443,8 +604,7 @@ impl AvailDAService {
     ) -> Result<Vec<AvailData>, anyhow::Error> {
         trace!(
             "Fetching transactions for block number {} and app_id {}",
-            block_number,
-            app_id.0
+            block_number, app_id.0
         );
         let block_client = self.client.block_client();
         let extrinsics = block_client
@@ -492,9 +652,9 @@ impl AvailDAService {
                         Ok(account) => account,
                         Err(e) => {
                             warn!(
-                            "Skipping blob: failed to parse AccountId (block {}, app_id {}, error={})",
-                            block_number, app_id.0, e
-                        );
+                                "Skipping blob: failed to parse AccountId (block {}, app_id {}, error={})",
+                                block_number, app_id.0, e
+                            );
                             continue;
                         }
                     }
